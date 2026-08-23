@@ -1,43 +1,65 @@
-# 헤르메스-IX: 제로 아워
+# HERMES-IX: ZERO HOUR
 
-한 대의 화면을 네 명이 차례로 넘겨 플레이하는 4인 전용 비밀 추리 보드게임 콘솔입니다. 별도 계정이나 서버 저장 없이 카드 셔플, 역할 배분, 비밀 액션, 심문, 최종 체포와 승패 판정을 모두 진행합니다.
+4명이 한 기기를 차례로 넘겨 플레이하는 SF 비밀 추리 보드게임입니다. 17장 카드 배분, 13개 타깃 후보, 비공개 직무 행동, 락다운 쿨다운과 스파이 역저격을 웹 앱으로 구현했습니다.
 
-## 플레이 시작
+## 기술 구성
 
-Node.js 22.13 이상이 필요합니다.
+- React 19 + TypeScript + Vite
+- Supabase Auth 익명 세션
+- Supabase Postgres `hermes_ix_games` 저장 테이블
+- 소유자 전용 Row Level Security(RLS)
+
+## 로컬 실행
 
 ```powershell
 npm install
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
-화면에 표시되는 주소를 브라우저로 열고 `새 임무 시작`을 누릅니다. 플레이 도중에는 화면의 안내에 따라 해당 플레이어에게만 기기를 전달합니다.
+`.env.local`에 Supabase 프로젝트 URL과 publishable key를 넣습니다. 이 파일은 Git에 커밋되지 않습니다.
 
-## 구현된 게임 흐름
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
+```
 
-- 위치 카드 13장 중 중앙 타깃 1장 자동 봉인
-- 역할 4장과 남은 위치 카드 12장을 네 명에게 정확히 4장씩 배분
-- 다른 사람의 역할을 드러내지 않는 익명 직무 액션 제출
-- 조종사 격리, 과학자 감식, 보안 책임자 기밀 조회, 스파이 파괴/위장 판정
-- 아이템 임계값 기반 1:1 진실 심문
-- 승무원은 진실로 고정되고 스파이만 O/X를 선택하는 전체 방송
-- 스파이와 타깃을 함께 맞혀야 하는 원스트라이크 최종 체포
-- 5회 파괴 공작과 오체포를 포함한 즉시 승패 판정
-- 전술 매뉴얼과 전체 17장 카드 아카이브
+Supabase Dashboard의 **Authentication → Providers → Anonymous Sign-Ins**를 활성화해야 클라우드 저장이 작동합니다. 익명 사용자도 `authenticated` 역할을 사용하며, 각 저장 데이터는 `owner_id = auth.uid()` RLS 정책으로 격리됩니다.
 
-## 원안에서 명확히 정리한 규칙
+## 데이터베이스
 
-1. 원안의 전체 심볼 표기는 `◉ 10 / ◆ 10 / ϟ 12`였지만 카드별 수치를 합산하면 `◉ 11 / ◆ 10 / ϟ 12`, 총 33개입니다. 앱은 실제 카드별 수치를 사용합니다.
-2. 무제한 1:1 진실 질문은 “당신이 스파이인가?”로 게임을 즉시 끝낼 수 있어, 질문을 `특정 심볼을 N개 이상 보유했는가?` 형식으로 제한했습니다.
-3. 역할별 액션이 역할을 바로 노출하지 않도록 네 액션을 개인 화면에서 수집한 뒤, 격리와 감식 결과만 수행자 이름 없이 공개합니다.
-4. 수사 담당자는 라운드마다 좌석 순서로 교대합니다. 스파이 차례에도 동일한 체포 화면이 표시되지만 스파이의 체포 선언은 자동 보류되어 정체가 노출되지 않습니다.
-5. 과학자는 스파이가 공격을 시도한 타깃을 정확히 감식하면 O를 받습니다. 같은 라운드에 조종사가 공격을 차단했더라도 시도 흔적은 검출됩니다.
+재현 가능한 SQL은 `supabase/migrations`에 있습니다.
+
+```powershell
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
+
+브라우저에는 service-role key를 절대 넣지 마십시오.
 
 ## 검증
 
 ```powershell
 npm run build
-node --test tests/rendered-html.test.mjs
+npm test
+npm run lint
 ```
 
-Windows에서 프로젝트 경로에 한글이 포함된 경우 Vite 8의 네이티브 번들러가 종료될 수 있습니다. 이 저장소 자체의 문제가 아니라 경로 처리 문제이며, 영문 경로에서 실행하거나 영문 경로의 디렉터리 연결을 사용하면 정상 빌드됩니다. 개발 서버는 현재 경로에서도 동작합니다.
+## 핵심 추가 룰
+
+- 조종사는 직전 라운드와 같은 구역을 연속 락다운할 수 없습니다.
+- 락다운은 다음 조종사 턴 전까지 유지되고, 막힌 스파이는 즉시 차단 사실을 확인합니다.
+- 스파이는 일반 행동 대신 역저격을 선언할 수 있습니다.
+- 조종사·과학자 저격은 대상의 총 심볼 수와 이번 직무 구역을 모두 맞혀야 합니다.
+- 보안 책임자 저격은 총 심볼 수와 직전 기밀 조회 아이템을 모두 맞혀야 하며, 실제 조회가 없으면 적중할 수 없습니다.
+- 역저격 실패 시 스파이 정체가 전원에게 공개됩니다.
+- 탈락자는 이후 행동·심문·방송·체포 순서에서 제외됩니다.
+
+## GitHub 업로드
+
+```powershell
+git remote add origin https://github.com/YOUR_ACCOUNT/hermes-ix-zero-hour.git
+git push -u origin main
+```
+
+배포 서비스에는 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` 두 환경 변수만 등록하면 됩니다.
