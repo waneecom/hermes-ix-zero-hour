@@ -24,6 +24,7 @@ const SYMBOLS: Record<SymbolKey, { icon: string; name: string }> = {
   eye: { icon: "◉", name: "센서 로그" }, key: { icon: "◆", name: "보안 키코드" }, power: { icon: "ϟ", name: "전력 회로" },
 };
 const symbolKeys = Object.keys(SYMBOLS) as SymbolKey[];
+const ZERO_SYMBOLS: Symbols = { eye: 0, key: 0, power: 0 };
 const ROLES: Record<RoleId, { name: string; english: string; action: string; alignment: string }> = {
   pilot: { name: "수석 조종사", english: "CHIEF PILOT", action: "구역 격리", alignment: "crew" },
   scientist: { name: "수석 과학자", english: "CHIEF SCIENTIST", action: "현장 감식", alignment: "crew" },
@@ -40,6 +41,8 @@ const LOCATIONS = [
 
 function locationName(id: number | null | undefined) { return LOCATIONS.find((entry) => entry[0] === id)?.[1] ?? "미실행"; }
 function total(symbols?: Symbols) { return symbols ? symbols.eye + symbols.key + symbols.power : 0; }
+function addSymbols(...groups: Symbols[]) { return groups.reduce((sum, group) => ({ eye: sum.eye + group.eye, key: sum.key + group.key, power: sum.power + group.power }), { ...ZERO_SYMBOLS }); }
+function subtractSymbols(totalSymbols: Symbols, usedSymbols: Symbols) { return { eye: totalSymbols.eye - usedSymbols.eye, key: totalSymbols.key - usedSymbols.key, power: totalSymbols.power - usedSymbols.power }; }
 
 function SymbolStrip({ symbols }: { symbols: Symbols }) {
   return <div className="mp-symbols">{symbolKeys.map((key) => <span key={key}>{SYMBOLS[key].icon} {symbols[key]}</span>)}</div>;
@@ -153,7 +156,9 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
 
   if (!view.secret || !role) return <main className="mp-shell">{header}<div className="mp-center"><div className="mp-loader"/><p>기밀 카드 배분 중...</p></div></main>;
 
-  const dossier = <aside className={`mp-dossier ${role.alignment}`}><small>{role.english}</small><h2>{role.name}</h2><p>{role.action}</p><SymbolStrip symbols={view.secret.totals}/><b>총 심볼 {total(view.secret.totals)}개</b>{view.me.eliminated ? <div className="mp-out">OUT · 관전 모드</div> : null}{view.secret.roleId === "spy" ? <div className="mp-spy-log"><small>PRIVATE OMEGA LOG</small><p>{view.secret.privateLog}</p><strong>{state!.destroyed}/5</strong></div> : null}<div className="mp-hand"><small>내 안전 구역 카드</small>{view.secret.hand.map((card) => <span key={card.id}>{String(card.id).padStart(2,"0")} · {locationName(card.id)}</span>)}</div></aside>;
+  const handSymbols = addSymbols(...view.secret.hand.map((card) => card.symbols));
+  const roleSymbols = subtractSymbols(view.secret.totals, handSymbols);
+  const dossier = <aside className={`mp-dossier ${role.alignment}`}><small>{role.english}</small><h2>{role.name}</h2><p>{role.action}</p><div className="mp-role-card"><small>역할 카드 아이템</small><SymbolStrip symbols={roleSymbols}/></div><b>내 카드 4장 총 심볼 {total(view.secret.totals)}개</b>{view.me.eliminated ? <div className="mp-out">OUT · 관전 모드</div> : null}{view.secret.roleId === "spy" ? <div className="mp-spy-log"><small>PRIVATE OMEGA LOG</small><p>{view.secret.privateLog}</p><strong>{state!.destroyed}/5</strong></div> : null}<div className="mp-hand"><small>내 안전 구역 카드</small>{view.secret.hand.map((card) => <article key={card.id}><span>{String(card.id).padStart(2,"0")} · {locationName(card.id)}</span><SymbolStrip symbols={card.symbols}/></article>)}</div></aside>;
 
   if (view.room.status === "action") {
     if (view.me.eliminated) return <main className="mp-shell">{header}<section className="mp-game">{dossier}<div className="mp-center"><h2>게임에서 탈락했습니다.</h2><p>남은 플레이어들의 임무를 관전할 수 있습니다.</p></div></section></main>;

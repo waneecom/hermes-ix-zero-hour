@@ -1,4 +1,5 @@
 export const SYMBOL_KEYS = ["eye", "key", "power"];
+export const ITEM_TOTALS = { eye: 10, key: 10, power: 12 };
 
 export const ROLES = [
   { id: "pilot", symbols: { eye: 1, key: 0, power: 1 } },
@@ -40,14 +41,45 @@ function addSymbols(...groups) {
   }), { eye: 0, key: 0, power: 0 });
 }
 
+function symbolsFrom(items) {
+  return items.reduce((symbols, item) => ({
+    ...symbols,
+    [item]: symbols[item] + 1,
+  }), { eye: 0, key: 0, power: 0 });
+}
+
+export function createRandomizedDeck(random = Math.random) {
+  const cardSizes = shuffled([
+    ...Array.from({ length: 15 }, () => 2),
+    1,
+    1,
+  ], random);
+  const itemPool = shuffled(SYMBOL_KEYS.flatMap((symbol) => (
+    Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)
+  )), random);
+  let cursor = 0;
+  let cardIndex = 0;
+  const nextSymbols = () => {
+    const size = cardSizes[cardIndex];
+    cardIndex += 1;
+    const symbols = symbolsFrom(itemPool.slice(cursor, cursor + size));
+    cursor += size;
+    return symbols;
+  };
+  const roles = ROLES.map((role) => ({ ...role, symbols: nextSymbols() }));
+  const locations = LOCATIONS.map((location) => ({ ...location, symbols: nextSymbols() }));
+  return { roles, locations };
+}
+
 export function symbolTotal(symbols) {
   return symbols.eye + symbols.key + symbols.power;
 }
 
 export function createDeal(members, random = Math.random) {
   if (members.length !== 4) throw new Error("FOUR_PLAYERS_REQUIRED");
-  const locations = shuffled(LOCATIONS, random);
-  const roles = shuffled(ROLES, random);
+  const randomizedDeck = createRandomizedDeck(random);
+  const locations = shuffled(randomizedDeck.locations, random);
+  const roles = shuffled(randomizedDeck.roles, random);
   const targetLocationId = locations[0].id;
   const assignments = [...members].sort((a, b) => a.seat - b.seat).map((member, seat) => {
     const hand = locations.slice(1 + seat * 3, 4 + seat * 3);

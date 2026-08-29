@@ -1,8 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDeal, resolveRound } from "../supabase/functions/hermes-room/engine.js";
+import { createDeal, createRandomizedDeck, ITEM_TOTALS, resolveRound, symbolTotal } from "../supabase/functions/hermes-room/engine.js";
 
 const members = [0, 1, 2, 3].map((seat) => ({ room_id: "room", user_id: `u${seat}`, seat, name: `P${seat}`, eliminated: false }));
+
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+test("randomizes every card while preserving the exact global item pool", () => {
+  const deck = createRandomizedDeck(seededRandom(20260829));
+  const cards = [...deck.roles, ...deck.locations];
+  const totals = cards.reduce((sum, card) => ({
+    eye: sum.eye + card.symbols.eye,
+    key: sum.key + card.symbols.key,
+    power: sum.power + card.symbols.power,
+  }), { eye: 0, key: 0, power: 0 });
+
+  assert.equal(cards.length, 17);
+  assert.deepEqual(totals, ITEM_TOTALS);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 15);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 1).length, 2);
+  assert.ok(cards.every((card) => [1, 2].includes(symbolTotal(card.symbols))));
+});
+
+test("a new mission produces a different item layout and deal", () => {
+  const first = createDeal(members, seededRandom(1));
+  const second = createDeal(members, seededRandom(2));
+  assert.notDeepEqual(first, second);
+});
 
 test("deals one role and three safe locations to all four remote players", () => {
   let value = 0;

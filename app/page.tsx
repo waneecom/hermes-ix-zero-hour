@@ -50,11 +50,30 @@ const LOCATIONS: Location[] = [
 ];
 
 const ZERO: Symbols = { eye: 0, key: 0, power: 0 };
+const ITEM_TOTALS: Symbols = { eye: 10, key: 10, power: 12 };
 const symbolKeys = Object.keys(SYMBOLS) as SymbolKey[];
 function shuffle<T>(items: T[]) { const result = [...items]; for (let i = result.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; } return result; }
 function addSymbols(...groups: Symbols[]) { return groups.reduce((sum, group) => ({ eye: sum.eye + group.eye, key: sum.key + group.key, power: sum.power + group.power }), { ...ZERO }); }
 function symbolTotal(group: Symbols) { return group.eye + group.key + group.power; }
 function getLocation(id?: number) { return LOCATIONS.find((location) => location.id === id)!; }
+
+function createRandomizedDeck() {
+  const cardSizes = shuffle([...Array.from({ length: 15 }, () => 2), 1, 1]);
+  const itemPool = shuffle(symbolKeys.flatMap((symbol) => Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)));
+  let cursor = 0;
+  let cardIndex = 0;
+  const nextSymbols = (): Symbols => {
+    const size = cardSizes[cardIndex];
+    cardIndex += 1;
+    const symbols = itemPool.slice(cursor, cursor + size).reduce((totals, symbol) => ({ ...totals, [symbol]: totals[symbol] + 1 }), { ...ZERO });
+    cursor += size;
+    return symbols;
+  };
+  return {
+    roles: ROLES.map((role) => ({ ...role, symbols: nextSymbols() })),
+    locations: LOCATIONS.map((location) => ({ ...location, symbols: nextSymbols() })),
+  };
+}
 
 function SymbolRow({ symbols, compact = false }: { symbols: Symbols; compact?: boolean }) {
   return <div className={`symbol-row ${compact ? "compact" : ""}`}>{symbolKeys.flatMap((key) => Array.from({ length: symbols[key] }, (_, index) => <span className={`symbol ${SYMBOLS[key].color}`} title={SYMBOLS[key].name} key={`${key}-${index}`}>{SYMBOLS[key].icon}</span>))}</div>;
@@ -65,7 +84,7 @@ function PrivacyGate({ name, label, onReveal }: { name: string; label: string; o
 }
 
 function LocationGrid({ selected, onSelect, disabledIds = [] }: { selected?: number; onSelect: (id: number) => void; disabledIds?: number[] }) {
-  return <div className="location-grid">{LOCATIONS.map((location) => { const disabled = disabledIds.includes(location.id); return <button type="button" disabled={disabled} className={`location-tile ${selected === location.id ? "selected" : ""} ${disabled ? "cooldown" : ""}`} aria-pressed={selected === location.id} onClick={() => onSelect(location.id)} key={location.id}><span className="location-number">{String(location.id).padStart(2, "0")}</span><span><b>{location.name}</b><small>{disabled ? "LOCKDOWN COOLDOWN" : location.english}</small></span><SymbolRow symbols={location.symbols} compact /></button>; })}</div>;
+  return <div className="location-grid">{LOCATIONS.map((location) => { const disabled = disabledIds.includes(location.id); return <button type="button" disabled={disabled} className={`location-tile ${selected === location.id ? "selected" : ""} ${disabled ? "cooldown" : ""}`} aria-pressed={selected === location.id} onClick={() => onSelect(location.id)} key={location.id}><span className="location-number">{String(location.id).padStart(2, "0")}</span><span><b>{location.name}</b><small>{disabled ? "LOCKDOWN COOLDOWN" : location.english}</small></span></button>; })}</div>;
 }
 
 function Topbar({ round, active, onManual, onReset }: { round?: number; active: boolean; onManual: () => void; onReset: () => void }) {
@@ -81,8 +100,8 @@ function Manual({ onClose }: { onClose: () => void }) {
     <article><b>04</b><div><h3>스파이 역저격</h3><p>스파이는 일반 행동 대신 승무원을 저격할 수 있습니다. 조종사·과학자는 손패 총 심볼 수와 이번 행동 구역을, 보안 책임자는 총 심볼 수와 직전 기밀 조회 심볼을 모두 맞혀야 합니다. 실패하면 스파이 정체가 공개됩니다.</p></div></article>
     <article><b>05</b><div><h3>최종 체포</h3><p>생존 승무원은 스파이 플레이어와 중앙 타깃을 함께 지목합니다. 둘 다 맞으면 승무원 승리, 하나라도 틀리면 스파이가 즉시 승리합니다.</p></div></article>
     <article className="warning-article"><b>06</b><div><h3>제로 아워</h3><p>격리되지 않은 중앙 타깃에 파괴 공작이 5회 누적되거나 승무원 전원이 탈락하면 스파이가 승리합니다.</p></div></article>
-    <aside><strong>룰 정정</strong><p>제공된 카드 데이터를 직접 합산하면 전체 심볼은 ◉ 11개 · ◆ 10개 · ϟ 12개입니다. 본 버전은 실제 카드 수치인 33개를 기준으로 판정합니다.</p></aside>
-  </div> : <div className="manual-content archive-grid"><div className="archive-section"><p className="section-label">ROLE CLEARANCE · 04</p>{ROLES.map((role) => <article className={`archive-card ${role.alignment}`} key={role.id}><span>{role.english}</span><h3>{role.name}</h3><p>{role.action} · {role.description}</p><SymbolRow symbols={role.symbols} /></article>)}</div><div className="archive-section"><p className="section-label">SHIP SECTORS · 13</p>{LOCATIONS.map((location) => <article className="archive-card" key={location.id}><span>{location.code} · {location.english}</span><h3>{location.name}</h3><p>{location.description}</p><SymbolRow symbols={location.symbols} /></article>)}</div></div>}</section></div>;
+    <aside><strong>랜덤 카드 프로토콜</strong><p>새 임무마다 역할 배정·카드 순서·중앙 타깃과 카드별 아이템이 다시 생성됩니다. 전체 합계는 항상 ◉ 10개 · ◆ 10개 · ϟ 12개이며, 시작된 임무의 단서는 종료까지 고정됩니다.</p></aside>
+  </div> : <div className="manual-content archive-grid"><div className="archive-section"><p className="section-label">ROLE CLEARANCE · 04</p>{ROLES.map((role) => <article className={`archive-card ${role.alignment}`} key={role.id}><span>{role.english}</span><h3>{role.name}</h3><p>{role.action} · {role.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div><div className="archive-section"><p className="section-label">SHIP SECTORS · 13</p>{LOCATIONS.map((location) => <article className="archive-card" key={location.id}><span>{location.code} · {location.english}</span><h3>{location.name}</h3><p>{location.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div></div>}</section></div>;
 }
 
 export default function Home({ onOnline }: { onOnline?: () => void }) {
@@ -183,7 +202,7 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
   }
 
   function startGame() {
-    const locationDeck = shuffle(LOCATIONS); const centralTarget = locationDeck[0]; const roleDeck = shuffle(ROLES);
+    const randomizedDeck = createRandomizedDeck(); const locationDeck = shuffle(randomizedDeck.locations); const centralTarget = locationDeck[0]; const roleDeck = shuffle(randomizedDeck.roles);
     const dealtPlayers = names.map((rawName, index) => { const hand = locationDeck.slice(1 + index * 3, 4 + index * 3); const role = roleDeck[index]; return { name: rawName.trim() || `플레이어 ${index + 1}`, role, hand, totals: addSymbols(role.symbols, ...hand.map((card) => card.symbols)), eliminated: false }; });
     setPlayers(dealtPlayers); setTarget(centralTarget); setPrivateIndex(0); setRound(1); setDestroyed(0); setSpyFeedback("아직 실행된 공작이 없습니다."); setCovered(true); setLastIsolation(null); setSpyExposed(false); setSaveId(null); setScreen("briefing");
   }
