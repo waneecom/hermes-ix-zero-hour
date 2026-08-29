@@ -23,9 +23,10 @@ test("randomizes every card while preserving the exact global item pool", () => 
 
   assert.equal(cards.length, 17);
   assert.deepEqual(totals, ITEM_TOTALS);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 15);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 1).length, 2);
-  assert.ok(cards.every((card) => [1, 2].includes(symbolTotal(card.symbols))));
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 3).length, 3);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 9);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 1).length, 5);
+  assert.ok(cards.every((card) => [1, 2, 3].includes(symbolTotal(card.symbols))));
 });
 
 test("a new mission produces a different item layout and deal", () => {

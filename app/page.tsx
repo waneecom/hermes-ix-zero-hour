@@ -58,7 +58,11 @@ function symbolTotal(group: Symbols) { return group.eye + group.key + group.powe
 function getLocation(id?: number) { return LOCATIONS.find((location) => location.id === id)!; }
 
 function createRandomizedDeck() {
-  const cardSizes = shuffle([...Array.from({ length: 15 }, () => 2), 1, 1]);
+  const cardSizes = shuffle([
+    ...Array.from({ length: 3 }, () => 3),
+    ...Array.from({ length: 9 }, () => 2),
+    ...Array.from({ length: 5 }, () => 1),
+  ]);
   const itemPool = shuffle(symbolKeys.flatMap((symbol) => Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)));
   let cursor = 0;
   let cardIndex = 0;
