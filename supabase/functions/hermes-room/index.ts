@@ -75,6 +75,14 @@ async function loadContext(roomId: string, userId: string) {
 
 async function view(roomId: string, userId: string) {
   const { room, member, secret } = await loadContext(roomId, userId);
+  let targetLocationId: number | null = null;
+  if (secret?.role_id === "spy") {
+    const { data } = await admin.from("hermes_ix_room_internal")
+      .select("target_location_id")
+      .eq("room_id", roomId)
+      .maybeSingle();
+    targetLocationId = data?.target_location_id ?? null;
+  }
   return {
     room: {
       id: room.id,
@@ -96,6 +104,7 @@ async function view(roomId: string, userId: string) {
       totals: secret.totals,
       privateLog: secret.private_log,
       privateResult: secret.private_result,
+      targetLocationId,
     } : null,
   };
 }
@@ -116,12 +125,6 @@ async function roomMembers(roomId: string) {
   const { data, error } = await admin.from("hermes_ix_room_members").select("*").eq("room_id", roomId).order("seat");
   if (error) throw error;
   return data;
-}
-
-function activeInvestigatorSeat(room: JsonRecord) {
-  const players = (room.public_state as JsonRecord).players as Array<JsonRecord>;
-  const alive = players.filter((player) => !player.eliminated).map((player) => Number(player.seat));
-  return alive[(Number(room.current_round) - 1) % alive.length];
 }
 
 async function createRoom(userId: string, name: string) {
@@ -158,6 +161,9 @@ async function startRoom(roomId: string, userId: string) {
     activeInvestigatorSeat: null,
     question: null,
     broadcastAnswers: null,
+    investigationQueue: [],
+    investigationLog: [],
+    arrestSeat: null,
   };
   const { error } = await admin.rpc("hermes_ix_start_room", {
     p_room_id: roomId,
@@ -173,19 +179,24 @@ async function startRoom(roomId: string, userId: string) {
 async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRecord, action: JsonRecord) {
   const roleId = String(secret.role_id);
   if (roleId === "pilot") {
+    if (action.type === "basic") return { type: "basic" };
+    if (Number(room.current_round) % 2 !== 0) throw new ApiError("락다운은 자신의 2·4·6…번째 턴에만 사용할 수 있습니다.");
     if (action.type !== "isolate") throw new ApiError("조종사는 락다운을 제출해야 합니다.");
     const locationId = validLocation(action.locationId);
     if (locationId === Number((room.public_state as JsonRecord).lastIsolation)) throw new ApiError("직전 구역은 연속 락다운할 수 없습니다.");
     return { type: "isolate", locationId };
   }
   if (roleId === "scientist") {
+    if (action.type === "basic") return { type: "basic" };
+    if (Number(room.current_round) % 2 !== 0) throw new ApiError("현장 감식은 자신의 2·4·6…번째 턴에만 사용할 수 있습니다.");
     if (action.type !== "inspect") throw new ApiError("과학자는 감식 구역을 제출해야 합니다.");
     return { type: "inspect", locationId: validLocation(action.locationId) };
   }
   if (roleId === "security") {
+    if (action.type === "basic") return { type: "basic" };
     if (action.type !== "query") throw new ApiError("보안 책임자는 기밀 조회를 제출해야 합니다.");
     const threshold = Number(action.threshold);
-    if (!Number.isInteger(threshold) || threshold < 1 || threshold > 12) throw new ApiError("조회 기준은 1~12개여야 합니다.");
+    if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("조회 기준은 1~20개여야 합니다.");
     return { type: "query", symbol: validSymbol(action.symbol), threshold };
   }
   if (roleId !== "spy") throw new ApiError("역할 정보를 확인할 수 없습니다.");
@@ -197,7 +208,7 @@ async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRec
   const { data: targetSecret, error } = await admin.from("hermes_ix_player_secrets").select("role_id").eq("room_id", roomId).eq("user_id", target.user_id).single();
   if (error || targetSecret.role_id === "spy") throw new ApiError("자신은 저격할 수 없습니다.");
   const totalGuess = Number(action.totalGuess);
-  if (!Number.isInteger(totalGuess) || totalGuess < 3 || totalGuess > 12) throw new ApiError("총 심볼 추측값을 확인하십시오.");
+  if (!Number.isInteger(totalGuess) || totalGuess < 2 || totalGuess > 20) throw new ApiError("광물 총합 추측값은 2~20개여야 합니다.");
   return {
     type: "assassinate",
     targetUserId: target.user_id,
@@ -255,18 +266,37 @@ async function openInvestigation(roomId: string, userId: string) {
   const { room } = await loadContext(roomId, userId);
   if (room.host_user_id !== userId) throw new ApiError("방장만 수사 단계를 열 수 있습니다.", 403);
   if (room.status !== "resolution") throw new ApiError("현재 수사 단계를 열 수 없습니다.");
-  const seat = activeInvestigatorSeat(room);
+  const queue = Array.isArray(room.public_state.investigationQueue)
+    ? room.public_state.investigationQueue.map(Number)
+    : [];
+  const seat = queue[0] ?? null;
   await updateRoom(room, {
-    status: "investigation",
-    public_state: { ...room.public_state, activeInvestigatorSeat: seat, question: null, broadcastAnswers: null },
+    status: seat === null ? "arrest" : "investigation",
+    public_state: {
+      ...room.public_state,
+      activeInvestigatorSeat: seat ?? room.public_state.arrestSeat,
+      question: null,
+      broadcastAnswers: null,
+    },
   });
   return view(roomId, userId);
 }
 
 function validateQuestion(body: JsonRecord) {
   const threshold = Number(body.threshold);
-  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 12) throw new ApiError("질문 기준은 1~12개여야 합니다.");
+  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("질문 기준은 1~20개여야 합니다.");
   return { symbol: validSymbol(body.symbol), threshold };
+}
+
+function advanceInvestigation(publicState: JsonRecord, currentSeat: number) {
+  const queue = Array.isArray(publicState.investigationQueue)
+    ? publicState.investigationQueue.map(Number)
+    : [];
+  const nextSeat = queue[queue.indexOf(currentSeat) + 1] ?? null;
+  return {
+    status: nextSeat === null ? "arrest" : "investigation",
+    activeInvestigatorSeat: nextSeat ?? Number(publicState.arrestSeat),
+  };
 }
 
 async function privateQuestion(roomId: string, userId: string, body: JsonRecord) {
@@ -279,9 +309,27 @@ async function privateQuestion(roomId: string, userId: string, body: JsonRecord)
   const { data: targetSecret, error } = await admin.from("hermes_ix_player_secrets").select("totals").eq("room_id", roomId).eq("user_id", target.user_id).single();
   if (error) throw error;
   const answer = Number(targetSecret.totals[question.symbol]) >= question.threshold;
-  const { error: secretError } = await admin.from("hermes_ix_player_secrets").update({ private_result: { type: "private_question", ...question, answer, round: room.current_round } }).eq("room_id", roomId).eq("user_id", userId);
-  if (secretError) throw secretError;
-  await updateRoom(room, { status: "arrest", public_state: { ...room.public_state, question: { mode: "private", ...question, completed: true } } });
+  const log = {
+    round: room.current_round,
+    investigatorSeat: member.seat,
+    investigatorName: member.name,
+    mode: "targeted",
+    targetSeat: target.seat,
+    targetName: target.name,
+    ...question,
+    answers: [{ seat: target.seat, name: target.name, answer }],
+  };
+  const next = advanceInvestigation(room.public_state, member.seat);
+  await updateRoom(room, {
+    status: next.status,
+    public_state: {
+      ...room.public_state,
+      activeInvestigatorSeat: next.activeInvestigatorSeat,
+      question: null,
+      broadcastAnswers: null,
+      investigationLog: [...(Array.isArray(room.public_state.investigationLog) ? room.public_state.investigationLog : []), log],
+    },
+  });
   return view(roomId, userId);
 }
 
@@ -289,7 +337,14 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
   const { room, member } = await loadContext(roomId, userId);
   if (room.status !== "investigation" || Number(room.public_state.activeInvestigatorSeat) !== member.seat) throw new ApiError("현재 수사 담당자만 질문할 수 있습니다.", 403);
   const question = validateQuestion(body);
-  await updateRoom(room, { status: "broadcast", public_state: { ...room.public_state, question: { mode: "broadcast", ...question }, broadcastAnswers: null } });
+  await updateRoom(room, {
+    status: "broadcast",
+    public_state: {
+      ...room.public_state,
+      question: { mode: "broadcast", ...question, investigatorSeat: member.seat, investigatorName: member.name },
+      broadcastAnswers: null,
+    },
+  });
   return view(roomId, userId);
 }
 
@@ -309,7 +364,27 @@ async function broadcastAnswer(roomId: string, userId: string, answer: unknown) 
     const value = playerSecret.role_id === "spy" ? answer : Number(playerSecret.totals[question.symbol]) >= Number(question.threshold);
     return { seat: entry.seat, name: entry.name, answer: value };
   });
-  await updateRoom(room, { status: "arrest", public_state: { ...room.public_state, broadcastAnswers: answers } });
+  const investigatorSeat = Number(question.investigatorSeat);
+  const log = {
+    round: room.current_round,
+    investigatorSeat,
+    investigatorName: question.investigatorName,
+    mode: "broadcast",
+    symbol: question.symbol,
+    threshold: question.threshold,
+    answers,
+  };
+  const next = advanceInvestigation(room.public_state, investigatorSeat);
+  await updateRoom(room, {
+    status: next.status,
+    public_state: {
+      ...room.public_state,
+      activeInvestigatorSeat: next.activeInvestigatorSeat,
+      question: null,
+      broadcastAnswers: null,
+      investigationLog: [...(Array.isArray(room.public_state.investigationLog) ? room.public_state.investigationLog : []), log],
+    },
+  });
   return view(roomId, userId);
 }
 
@@ -350,7 +425,16 @@ async function nextRound(roomId: string, userId: string) {
   await updateRoom(room, {
     status: "action",
     current_round: Number(room.current_round) + 1,
-    public_state: { ...room.public_state, players, report: null, activeInvestigatorSeat: null, question: null, broadcastAnswers: null },
+    public_state: {
+      ...room.public_state,
+      players,
+      report: null,
+      activeInvestigatorSeat: null,
+      investigationQueue: [],
+      arrestSeat: null,
+      question: null,
+      broadcastAnswers: null,
+    },
   });
   return view(roomId, userId);
 }

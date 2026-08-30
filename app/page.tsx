@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureAnonymousSession, isSupabaseConfigured, supabase } from "../src/supabase";
+import GameManual from "../src/GameManual";
 
 type SymbolKey = "eye" | "key" | "power";
 type Symbols = Record<SymbolKey, number>;
@@ -98,7 +99,7 @@ function Topbar({ round, active, onManual, onReset }: { round?: number; active: 
   return <header className="topbar"><button className="brand-mark" type="button" onClick={onReset} aria-label="처음으로">H<span>IX</span></button><div className="brand-copy"><p className="eyebrow">DEEP SPACE VESSEL · HERMES-IX</p><h1>ZERO HOUR</h1></div>{round ? <div className="round-readout"><small>CURRENT CYCLE</small><b>{String(round).padStart(2, "0")}</b></div> : null}<nav><button type="button" className="text-button" onClick={onManual}>전술 매뉴얼</button>{active ? <button type="button" className="text-button danger-text" onClick={onReset}>임무 중단</button> : null}</nav></header>;
 }
 
-function Manual({ onClose }: { onClose: () => void }) {
+export function Manual({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"protocol" | "archive">("protocol");
   return <div className="manual-backdrop" role="dialog" aria-modal="true" aria-label="전술 매뉴얼"><section className="manual-panel"><header><div><p className="eyebrow">HERMES-IX / TACTICAL DATABASE</p><h2>전술 매뉴얼</h2></div><button type="button" onClick={onClose} aria-label="닫기">×</button></header><div className="manual-tabs"><button type="button" className={tab === "protocol" ? "active" : ""} onClick={() => setTab("protocol")}>게임 프로토콜</button><button type="button" className={tab === "archive" ? "active" : ""} onClick={() => setTab("archive")}>17장 카드 아카이브</button></div>{tab === "protocol" ? <div className="manual-content protocol-list">
     <article><b>01</b><div><h3>비밀 배분</h3><p>위치 카드 13장 중 한 장은 중앙 타깃으로 봉인됩니다. 네 플레이어는 역할 1장과 안전이 확인된 위치 3장을 받습니다.</p></div></article>
@@ -253,6 +254,19 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
     setCovered(true); setScreen(saved.screen === "briefing" ? "action" : saved.screen); setSaveStatus("저장 임무 불러옴");
   }
 
+  async function deleteGame(row: SaveRow) {
+    if (!supabase || !window.confirm(`저장된 임무 “${row.name}”을 삭제할까요?`)) return;
+    try {
+      const { error } = await supabase.from("hermes_ix_games").delete().eq("id", row.id);
+      if (error) throw error;
+      setSavedGames((games) => games.filter((game) => game.id !== row.id));
+      if (saveId === row.id) setSaveId(null);
+      setSaveStatus("저장 임무 삭제 완료");
+    } catch (reason) {
+      setSaveStatus(reason instanceof Error ? `삭제 실패 · ${reason.message}` : "삭제 실패");
+    }
+  }
+
   function nextAliveIndex(after: number) { return aliveIndices.find((index) => index > after); }
 
   function resetGame(force = false) {
@@ -312,10 +326,12 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
 
   const assassinationVictim = players[assassinationTarget];
   const actionReady = currentPlayer?.role.id === "pilot" ? Boolean(selectedLocation && selectedLocation !== lastIsolation) : currentPlayer?.role.id === "scientist" ? Boolean(selectedLocation) : currentPlayer?.role.id === "spy" ? Boolean(spyIntent && (spyIntent !== "assassinate" || (assassinationVictim && !assassinationVictim.eliminated && assassinationVictim.role.alignment === "crew"))) : true;
+  const savedGameDeletePanel = savedGames.length ? <div className="saved-delete-panel"><small>저장 경기 관리</small>{savedGames.map((game) => <div key={game.id}><span>{game.name}</span><button type="button" onClick={() => void deleteGame(game)}>삭제</button></div>)}</div> : null;
 
   return <main className={`mission-shell screen-${screen}`}>
     <Topbar round={screen !== "landing" && screen !== "setup" && players.length ? round : undefined} active={screen !== "landing" && screen !== "setup"} onManual={() => setManualOpen(true)} onReset={() => resetGame()} />
     <div className={`cloud-status ${cloudReady ? "online" : ""}`}><span>●</span> SUPABASE · {saveStatus}</div>
+    {screen === "landing" ? savedGameDeletePanel : null}
 
     {screen === "landing" ? <><section className="hero-grid"><div className="hero-copy"><p className="kicker">4인용 비밀 추리 · 함선 생존 프로토콜</p><h2>파괴자는 이미<br /><em>승선했다.</em></h2><p className="lede">13개 구역, 17장의 기밀 카드, 단 하나의 파괴 타깃. 다섯 번째 공작이 끝나기 전에 스파이와 목표 구역을 찾아내십시오.</p><div className="hero-actions"><button className="primary-cta" type="button" aria-controls="episodes" onClick={() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" })}>게임을 시작하기 <span>↓</span></button><button className="secondary-cta" type="button" onClick={() => setManualOpen(true)}>룰 먼저 보기</button></div>{savedGames.length ? <div className="saved-missions"><small>SUPABASE · SAVED MISSIONS</small>{savedGames.map((game) => <button type="button" key={game.id} onClick={() => loadGame(game)}><span>{game.name}</span><b>CYCLE {String(game.current_round).padStart(2, "0")} · {new Date(game.updated_at).toLocaleDateString("ko-KR")}</b></button>)}</div> : null}</div><div className="command-panel" aria-label="게임 구성"><div className="panel-head"><span>MISSION CONTROL</span><b>ZERO HOUR</b></div><div className="threat-ring"><div><strong>5</strong><span>/ 5</span><small>폭발 임계치</small></div></div><div className="telemetry"><div><span>승무원</span><strong>03</strong></div><div><span>잠입자</span><strong className="danger">01</strong></div><div><span>기밀 카드</span><strong>17</strong></div></div><div className="classified">CENTRAL TARGET · CLASSIFIED</div></div></section><EpisodePrologue onOnline={onOnline} onHotseat={() => setScreen("setup")} /><footer className="signal-line"><span>● SYSTEM READY</span><div /><p>HERMES NETWORK / ENCRYPTED CHANNEL 9</p></footer></> : null}
 
@@ -344,6 +360,6 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
 
     {screen === "gameover" && result && target ? <section className={`gameover-view ${result.winner}`}><p className="kicker">MISSION TERMINATED · FINAL DISCLOSURE</p><h2>{result.winner === "crew" ? "스파이 체포." : "HERMES-IX LOST."}</h2><p className="gameover-reason">{result.reason}</p><div className="final-reveal"><article><small>OMEGA OPERATIVE</small><span>{String(players.indexOf(spyPlayer!)+1).padStart(2,"0")}</span><h3>{spyPlayer!.name}</h3><p>{spyPlayer!.role.name}</p></article><article><small>CENTRAL TARGET</small><span>{String(target.id).padStart(2,"0")}</span><h3>{target.name}</h3><p>{target.english}</p><SymbolRow symbols={target.symbols} /></article><article><small>SABOTAGE STACK</small><span>{destroyed}</span><h3>/ 5</h3><p>최종 누적 공작</p></article></div><div className="all-hands">{players.map((player, index) => <div className={player.eliminated ? "eliminated" : ""} key={index}><b>{player.name}{player.eliminated ? " · OUT" : ""}</b><span className={player.role.alignment}>{player.role.name}</span><p>{player.hand.map((card) => `${String(card.id).padStart(2,"0")} ${card.name}`).join(" · ")}</p></div>)}</div><button className="primary-cta" type="button" onClick={() => resetGame(true)}>새로운 임무 시작 <span>↗</span></button></section> : null}
 
-    {manualOpen ? <Manual onClose={() => setManualOpen(false)} /> : null}
+    {manualOpen ? <GameManual onClose={() => setManualOpen(false)} /> : null}
   </main>;
 }
