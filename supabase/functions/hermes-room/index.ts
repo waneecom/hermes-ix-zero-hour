@@ -153,7 +153,7 @@ async function startRoom(roomId: string, userId: string) {
   if (members.length !== 4) throw new ApiError("4명이 모두 입장해야 시작할 수 있습니다.");
   const deal = createDeal(members);
   const publicState = {
-    rulesVersion: "4.0",
+    rulesVersion: "4.1",
     mineralTotal: 30,
     players: members.map((entry) => ({ seat: entry.seat, name: entry.name, eliminated: false, submitted: false })),
     destroyed: 0,
@@ -340,6 +340,32 @@ async function targetedQuestionLog(roomId: string, room: JsonRecord, member: Jso
   };
 }
 
+async function broadcastQuestionLog(roomId: string, room: JsonRecord, member: JsonRecord, question: JsonRecord) {
+  const [members, secretsResult] = await Promise.all([
+    roomMembers(roomId),
+    admin.from("hermes_ix_player_secrets").select("user_id,totals").eq("room_id", roomId),
+  ]);
+  if (secretsResult.error) throw secretsResult.error;
+  const secrets = new Map(secretsResult.data.map((entry) => [entry.user_id, entry]));
+  const answers = members.filter((entry) => !entry.eliminated).map((entry) => {
+    const playerSecret = secrets.get(entry.user_id);
+    return {
+      seat: entry.seat,
+      name: entry.name,
+      answer: Number(playerSecret?.totals?.[String(question.symbol)] ?? 0) >= Number(question.threshold),
+    };
+  });
+  return {
+    round: room.current_round,
+    investigatorSeat: member.seat,
+    investigatorName: member.name,
+    mode: "broadcast",
+    symbol: question.symbol,
+    threshold: question.threshold,
+    answers,
+  };
+}
+
 async function submitAction(roomId: string, userId: string, rawAction: JsonRecord) {
   const { room, member, secret } = await loadContext(roomId, userId);
   if (room.status !== "action") throw new ApiError("지금은 행동을 선택할 때가 아닙니다.");
@@ -353,22 +379,8 @@ async function submitAction(roomId: string, userId: string, rawAction: JsonRecor
     const log = await targetedQuestionLog(roomId, room, member, question);
     return finishAction(roomId, room, userId, action, log);
   }
-
-  await updateRoom(room, {
-    status: "broadcast",
-    public_state: {
-      ...room.public_state,
-      question: {
-        mode: "broadcast",
-        symbol: question.symbol,
-        threshold: question.threshold,
-        investigatorSeat: member.seat,
-        investigatorName: member.name,
-      },
-      broadcastAnswers: null,
-    },
-  });
-  return view(roomId, userId);
+  const log = await broadcastQuestionLog(roomId, room, member, question);
+  return finishAction(roomId, room, userId, action, log);
 }
 
 async function openInvestigation(roomId: string, userId: string) {
@@ -452,7 +464,7 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
 }
 
 // Kept only so rooms created by older deployments can still be read safely.
-// Ruleset 4.0 does not route requests to these three legacy phase handlers.
+// Ruleset 4.1 does not route requests to these three legacy phase handlers.
 void openInvestigation;
 void privateQuestion;
 void broadcastQuestion;
@@ -503,10 +515,11 @@ async function broadcastAnswer(roomId: string, userId: string, answer: unknown) 
   if (typeof answer !== "boolean") throw new ApiError("O 또는 X를 선택하세요.");
   return completeBroadcast(roomId, room, answer);
 }
+void broadcastAnswer;
 
 async function handleTimeout(roomId: string, userId: string) {
   const { room } = await loadContext(roomId, userId);
-  if (room.status !== "action" && room.status !== "broadcast") throw new ApiError("지금은 시간 제한을 확인할 단계가 아닙니다.", 409);
+  if (room.status !== "action") throw new ApiError("지금은 시간 제한을 확인할 단계가 아닙니다.", 409);
   const deadline = Number(room.public_state.turnDeadline ?? 0);
   if (!deadline || Date.now() < deadline) throw new ApiError("아직 제한 시간이 남아 있습니다.", 409);
   const members = await roomMembers(roomId);
@@ -517,7 +530,6 @@ async function handleTimeout(roomId: string, userId: string) {
   const timeoutRoom = await updateRoom(room, {
     public_state: { ...room.public_state, turnNotice: notice },
   });
-  if (room.status === "broadcast") return completeBroadcast(roomId, timeoutRoom, false);
   return finishAction(roomId, timeoutRoom, activeMember.user_id, { type: "timeout" });
 }
 
@@ -591,7 +603,6 @@ Deno.serve(async (req: Request) => {
     else if (operation === "view") data = await view(roomId, user.id);
     else if (operation === "start") data = await startRoom(roomId, user.id);
     else if (operation === "action") data = await submitAction(roomId, user.id, (body.action ?? {}) as JsonRecord);
-    else if (operation === "broadcast_answer") data = await broadcastAnswer(roomId, user.id, body.answer);
     else if (operation === "timeout") data = await handleTimeout(roomId, user.id);
     else if (operation === "arrest") data = await arrest(roomId, user.id, body);
     else if (operation === "next_round") data = await nextRound(roomId, user.id);

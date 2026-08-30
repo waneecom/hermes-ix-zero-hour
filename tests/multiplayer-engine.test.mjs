@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import { createDeal, createRandomizedDeck, ITEM_TOTALS, resolveRound, symbolTotal } from "../supabase/functions/hermes-room/engine.js";
 
 const members = [0, 1, 2, 3].map((seat) => ({ room_id: "room", user_id: `u${seat}`, seat, name: `P${seat}`, eliminated: false }));
+
+test("online rules immediately calculate truthful answers for every player", () => {
+  const source = fs.readFileSync(new URL("../supabase/functions/hermes-room/index.ts", import.meta.url), "utf8");
+  assert.match(source, /rulesVersion: "4\.1"/);
+  assert.match(source, /async function broadcastQuestionLog/);
+  assert.match(source, /return finishAction\(roomId, room, userId, action, log\)/);
+  assert.doesNotMatch(source, /operation === "broadcast_answer"/);
+});
 
 function seededRandom(seed) {
   let value = seed >>> 0;
