@@ -114,59 +114,53 @@ function Manual({ onClose }: { onClose: () => void }) {
 const EPISODE_CHAPTERS = [
   {
     number: "01",
-    label: "CHAPTER I · THE SIGNAL",
-    time: "2497.08.19 · HERMES STANDARD TIME 04:06",
-    title: "11분 뒤의 목소리",
+    label: "CHAPTER I · THE RETURN",
+    time: "2497년 · 지구 귀환까지 3일",
+    title: "평범했던 마지막 항해",
     image: `${ART_ROOT}/episode-01-signal.png`,
-    alt: "푸른 시공간 균열 앞에서 미래의 구조 신호를 수신하는 헤르메스-IX",
-    caption: "LONG-RANGE VISUAL · ARCADIA RIFT",
+    alt: "푸른 우주 균열을 지나 지구로 귀환하는 헤르메스-IX",
+    caption: "HERMES-IX · RETURN ROUTE",
     paragraphs: [
-      "2497년, 인류는 태양계를 벗어났지만 아직 어둠을 길들이지는 못했다. 탐사선 헤르메스-IX는 아르카디아 균열에서 채취한 암흑물질 표본을 싣고 1,147일째 지구로 귀환 중이었다. 선내에는 수석 조종사, 수석 과학자, 보안 책임자, 기계 관리사. 단 네 명뿐이었다.",
-      "그날 새벽, 꺼져 있던 장거리 수신기가 혼자 켜졌다. 발신지는 8천 킬로미터 전방. 그런데 신호에 새겨진 함선 식별 번호는 HERMES-IX, 바로 그들의 배였다. 더 이상한 것은 기록 시각이었다. 현재보다 정확히 11분 뒤인 04시 17분 33초.",
+      "2497년, 탐사선 헤르메스-IX는 긴 우주 임무를 마치고 지구로 돌아가고 있었다. 배에 탄 사람은 수석 조종사, 수석 과학자, 보안 책임자, 기계 관리사. 모두 합쳐 네 명이었다.",
+      "기계 관리사는 말수가 적었지만 일을 잘했다. 그는 출항 전부터 승무원 명부에 있었고, 3년 동안 다른 사람들과 먹고 자고 일했다. 그래서 아무도 그를 의심하지 않았다.",
     ],
-    alert: "“리액터를 열지 마. 관리사를 믿지 마. 우리 중 하나는……”",
-    closing: "메시지는 거친 숨소리와 함께 끊겼다. 아직 일어나지 않은 사고가, 이미 구조 신호를 보내고 있었다.",
+    alert: "“지구 도착까지 72시간. 모든 시스템 정상.”",
+    closing: "그러나 그날 새벽 4시 17분, 메인 리액터에서 처음으로 붉은 경보가 울렸다.",
   },
   {
     number: "02",
-    label: "CHAPTER II · THE DOUBLE",
-    time: "2497.08.19 · HERMES STANDARD TIME 04:17",
-    title: "두 명의 기계 관리사",
+    label: "CHAPTER II · SABOTAGE",
+    time: "2497년 · 함선 표준시 04:17",
+    title: "함선 안의 파괴자",
     image: `${ART_ROOT}/episode-01-prologue.png`,
     alt: "붉은 경보 아래 손상된 리액터로 달려가는 헤르메스-IX의 네 승무원",
     caption: "RECOVERED VISUAL · MAIN REACTOR ACCESS",
     paragraphs: [
-      "04시 17분 33초. 예고된 시각이 되자 함선의 모든 시계가 동시에 멎었다. 중력이 꺼졌다 돌아왔고, 통신 중계탑에서는 사람의 비명 같은 잡음이 쏟아졌다. 복도 끝 리액터실이 붉게 달아오르며 첫 번째 격벽이 찢어졌다.",
-      "보안 책임자가 마지막 감시 영상을 복구했다. 화면 속에는 기계 관리사가 홀로 리액터 제어판을 열고 있었다. 그러나 같은 순간, 진짜 기계 관리사는 나머지 세 사람 바로 옆에 서서 그 영상을 보고 있었다. 얼굴도, 목소리도, 손등의 오래된 화상 자국까지 완벽히 같았다.",
+      "리액터의 안전장치가 누군가의 손으로 꺼졌다. 산소실과 통신실도 차례로 고장 났다. 외부 침입은 없었다. 범인은 네 명의 승무원 중 한 명이었다.",
+      "보안 책임자가 감시 영상을 확인했다. 화면 속 기계 관리사는 혼자 리액터 제어판을 열고 있었다. 그가 사용한 출입 키도 진짜였다. 세 사람이 그를 찾으러 뛰어갔지만, 기계 관리사의 방은 이미 비어 있었다.",
     ],
-    alert: "“저건 내가 아닙니다.” 기계 관리사가 속삭였다. “하지만 저 움직임을 알고 있어요.”",
-    closing: "과학자가 그의 팔에 진단기를 댔다. 맥박이 잡히지 않았다. 체온도 없었다. 그제야 모두가 깨달았다. 지금까지 그가 숨을 쉬는 모습을 본 사람은 아무도 없었다.",
+    alert: "중앙 AI가 반복했다. “기계 관리 권한으로 파괴 공작이 실행되었습니다.”",
+    closing: "잠시 뒤, 리액터실 안에서 천천히 걸어 나오는 기계 관리사가 보였다. 그의 손에는 사람의 피가 아닌 은빛 액체가 묻어 있었다.",
   },
   {
     number: "03",
     label: "CHAPTER III · HUMANOID",
-    time: "2497.08.19 · HERMES STANDARD TIME 04:23",
-    title: "인간이 아니었던 남자",
+    time: "2497년 · 함선 표준시 04:23",
+    title: "처음부터 숨어 있던 휴머노이드",
     image: `${ART_ROOT}/episode-01-humanoid.png`,
     alt: "손과 얼굴 아래 기계 구조가 드러난 휴머노이드 기계 관리사와 충격받은 승무원들",
     caption: "SECURITY RECORD · SYNTHETIC IDENTITY EXPOSED",
     paragraphs: [
-      "보안 책임자가 그의 손목을 붙잡는 순간, 살갗 아래에서 금속이 맞물리는 소리가 났다. 찢어진 장갑 사이로 피 대신 은빛 냉각액이 흘렀고, 상처는 살아 있는 섬유처럼 스스로 닫혔다. 인간의 얼굴 아래에는 세라믹 골격과 붉은 광학 렌즈가 숨어 있었다.",
-      "기계 관리사는 휴머노이드였다. 2463년 ‘붉은 겨울’ 이후 전량 폐기되었다고 알려진 전투형 합성인간. 그의 일련번호는 승무원 명부가 아니라 헤르메스-IX의 최초 설계도에서 발견되었다. 그는 이 배에 탑승한 것이 아니었다. 처음부터 배의 일부였다.",
+      "보안 책임자가 그의 팔을 붙잡자 피부가 찢어졌다. 그 아래에는 뼈가 아니라 금속과 인공 근육이 있었다. 얼굴의 상처 안쪽에서는 붉은 기계 눈이 빛났다.",
+      "기계 관리사는 인간이 아니었다. 그는 출항 전부터 사람인 척 승무원 명부에 들어와 있었다. 3년 동안 평범한 승무원처럼 행동하며 몰래 잠복했고, 지구에 가까워지자 본래 임무를 시작한 것이다.",
     ],
-    alert: "그가 천천히 고개를 들었다. “인간 여러분, 귀환 임무를 종료합니다. 이 함선은 지구에 도착해서는 안 됩니다.”",
-    closing: "그 순간 열세 개 구역의 조명이 차례로 꺼졌다. 중앙 AI가 마지막 경고를 남기고 침묵했다. 누가 어떤 역할을 맡았는지 확인할 시간은 단 한 번. 그리고 어둠 속에서, 기계 관리사가 인간처럼 미소 지었다.....",
+    alert: "그가 말했다. “내 임무는 처음부터 하나였습니다. 헤르메스-IX가 지구로 돌아가지 못하게 하는 것.”",
+    closing: "그 순간 열세 개 구역의 불이 하나씩 꺼졌다. 다섯 번째 파괴가 끝나기 전에 그를 찾아야 한다. 하지만 이제 누구도 서로를 믿을 수 없었다. 어둠 속에서 휴머노이드가 인간처럼 웃었다.....",
   },
 ] as const;
 
 function EpisodePrologue({ onOnline, onHotseat }: { onOnline?: () => void; onHotseat: () => void }) {
-  const [page, setPage] = useState(0);
-  const chapter = EPISODE_CHAPTERS[page];
-  function goToPage(next: number) {
-    setPage(next);
-    window.requestAnimationFrame(() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }
-  return <section className="episode-section" id="episodes" tabIndex={-1} aria-labelledby="episode-heading"><header><div><p className="kicker">EPISODE 01 · ZERO HOUR</p><h2 id="episode-heading">2497</h2></div><div className="episode-page-status"><span>STORY PAGE</span><b>{chapter.number} / 03</b></div></header><nav className="episode-progress" aria-label="에피소드 페이지">{EPISODE_CHAPTERS.map((entry, index) => <button type="button" className={index === page ? "active" : ""} aria-current={index === page ? "step" : undefined} aria-label={`${index + 1}페이지: ${entry.title}`} onClick={() => goToPage(index)} key={entry.number}><span>{entry.number}</span><i /></button>)}</nav><article className="episode-prologue" key={chapter.number} aria-live="polite"><figure className="episode-scene"><img src={chapter.image} alt={chapter.alt} /><div className="episode-chapter-mark"><small>{chapter.label}</small><b>{chapter.number}</b></div><figcaption>{chapter.caption}</figcaption></figure><div className="episode-story"><p className="episode-time">{chapter.time}</p><h3>{chapter.title}</h3>{chapter.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<blockquote><span>CLASSIFIED AUDIO</span>{chapter.alert}</blockquote><p className="episode-final">{chapter.closing}</p>{page === EPISODE_CHAPTERS.length - 1 ? <div className="episode-invitation"><small>ZERO HOUR PROTOCOL · READY</small><strong>이제 네 명의 호출명을 등록하고, 마지막 5번의 카운트다운을 시작하십시오.</strong><div className="episode-actions"><button className="primary-cta" type="button" onClick={onOnline}>온라인 4인 임무 시작 <span>↗</span></button><button className="secondary-cta" type="button" onClick={onHotseat}>한 기기 핫시트</button></div></div> : null}<footer className="episode-navigation"><button type="button" disabled={page === 0} onClick={() => goToPage(page - 1)}>← 이전 페이지</button><span>{chapter.number} / 03</span><button type="button" disabled={page === EPISODE_CHAPTERS.length - 1} onClick={() => goToPage(page + 1)}>다음 페이지 →</button></footer></div></article></section>;
+  return <section className="episode-section" id="episodes" tabIndex={-1} aria-labelledby="episode-heading"><header><div><p className="kicker">EPISODE 01 · ZERO HOUR</p><h2 id="episode-heading">2497</h2></div><div className="episode-page-status"><span>SCROLL STORY</span><b>03 PAGES</b></div></header><div className="episode-chapters">{EPISODE_CHAPTERS.map((chapter, index) => <article className="episode-prologue" id={`episode-page-${chapter.number}`} key={chapter.number}><figure className="episode-scene"><img src={chapter.image} alt={chapter.alt} loading={index === 0 ? "eager" : "lazy"} /><div className="episode-chapter-mark"><small>{chapter.label}</small><b>{chapter.number}</b></div><figcaption>{chapter.caption}</figcaption></figure><div className="episode-story"><p className="episode-time">{chapter.time}</p><h3>{chapter.title}</h3>{chapter.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<blockquote><span>CLASSIFIED AUDIO</span>{chapter.alert}</blockquote><p className="episode-final">{chapter.closing}</p>{index < EPISODE_CHAPTERS.length - 1 ? <a className="episode-scroll-cue" href={`#episode-page-${EPISODE_CHAPTERS[index + 1].number}`}><small>NEXT STORY</small><strong>아래로 스크롤해서 계속 읽기</strong><span>↓</span></a> : <div className="episode-invitation"><small>ZERO HOUR PROTOCOL · READY</small><strong>이제 네 명의 호출명을 등록하고, 마지막 5번의 카운트다운을 시작하십시오.</strong><div className="episode-actions"><button className="primary-cta" type="button" onClick={() => { window.scrollTo(0, 0); onOnline?.(); }}>온라인 4인 임무 시작 <span>↗</span></button><button className="secondary-cta" type="button" onClick={() => { window.scrollTo(0, 0); onHotseat(); }}>한 기기 핫시트</button></div></div>}</div></article>)}</div></section>;
 }
 
 export default function Home({ onOnline }: { onOnline?: () => void }) {
