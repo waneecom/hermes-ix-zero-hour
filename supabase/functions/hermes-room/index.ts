@@ -158,7 +158,7 @@ async function startRoom(roomId: string, userId: string) {
   if (members.length !== 4) throw new ApiError("4명이 모두 입장해야 시작할 수 있습니다.");
   const deal = createDeal(members);
   const publicState = {
-    rulesVersion: "4.4",
+    rulesVersion: "4.5",
     mineralTotal: 30,
     fixedCardLayout: true,
     locationCatalog: deal.locationCatalog,
@@ -172,6 +172,7 @@ async function startRoom(roomId: string, userId: string) {
     broadcastAnswers: null,
     investigationQueue: [],
     investigationLog: [],
+    trustScan: null,
     arrestSeat: null,
     activeTurnSeat: members[0].seat,
     turnDeadline: Date.now() + TURN_DURATION_MS,
@@ -474,7 +475,7 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
 }
 
 // Kept only so rooms created by older deployments can still be read safely.
-// Ruleset 4.4 does not route requests to these three legacy phase handlers.
+// Ruleset 4.5 does not route requests to these three legacy phase handlers.
 void openInvestigation;
 void privateQuestion;
 void broadcastQuestion;

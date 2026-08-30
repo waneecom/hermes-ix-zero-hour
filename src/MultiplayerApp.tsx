@@ -14,7 +14,7 @@ type InvestigationEntry = {
   answers: Array<{ seat: number; name: string; answer: boolean }>;
 };
 type Report = {
-  isolation: number | null; inspection: number | null; detected: boolean;
+  isolation: number | null; inspection: number | null; detected: boolean; spyTotal: number | null;
   assassination?: { targetSeat: number | null; targetName: string; success: boolean; spySeat?: number; spyName?: string } | null;
 };
 type PublicState = {
@@ -24,6 +24,7 @@ type PublicState = {
   result: { winner: "crew" | "spy"; reason: string; spySeat: number; targetLocationId: number } | null;
   activeInvestigatorSeat: number | null; arrestSeat: number | null; investigationQueue: number[];
   investigationLog: InvestigationEntry[];
+  trustScan?: Array<{ seat: number; name: string; locationId: number }> | null;
   question: { mode: "broadcast"; symbol: SymbolKey; threshold: number; investigatorSeat: number; investigatorName: string } | null;
   broadcastAnswers: Array<{ seat: number; name: string; answer: boolean }> | null;
   activeTurnSeat: number | null; turnDeadline: number | null; turnDurationSeconds?: number; turnNotice?: string | null;
@@ -52,13 +53,13 @@ const MINERAL_POOL_SIZE = 6;
 const SABOTAGE_TARGET = 7;
 const ZERO_SYMBOLS: Symbols = { eye: 0, key: 0, power: 0, bio: 0, quantum: 0 };
 const FIXED_LOCATION_CATALOG: Array<{ id: number; symbols: Symbols }> = [
-  { id: 1, symbols: { ...ZERO_SYMBOLS, power: 2 } },
-  { id: 2, symbols: { ...ZERO_SYMBOLS, eye: 1, quantum: 1 } },
+  { id: 1, symbols: { ...ZERO_SYMBOLS, power: 3 } },
+  { id: 2, symbols: { ...ZERO_SYMBOLS, eye: 1, quantum: 2 } },
   { id: 3, symbols: { ...ZERO_SYMBOLS, power: 1, quantum: 1 } },
   { id: 4, symbols: { ...ZERO_SYMBOLS, bio: 2 } },
   { id: 5, symbols: { ...ZERO_SYMBOLS, eye: 1, quantum: 1 } },
-  { id: 6, symbols: { ...ZERO_SYMBOLS, key: 1, quantum: 1 } },
-  { id: 7, symbols: { ...ZERO_SYMBOLS, eye: 1, bio: 1 } },
+  { id: 6, symbols: { ...ZERO_SYMBOLS, key: 2, quantum: 1 } },
+  { id: 7, symbols: { ...ZERO_SYMBOLS, eye: 1, bio: 2 } },
   { id: 8, symbols: { ...ZERO_SYMBOLS, power: 1, bio: 1 } },
   { id: 9, symbols: { ...ZERO_SYMBOLS, key: 2 } },
   { id: 10, symbols: { ...ZERO_SYMBOLS, eye: 2 } },
@@ -127,6 +128,11 @@ function InvestigationLog({ entries }: { entries: InvestigationEntry[] }) {
       <div>{entry.answers.map((answer) => <span key={answer.seat}>{answer.name} <b>{answer.answer ? "O" : "X"}</b></span>)}</div>
     </article>
   ))}</div>;
+}
+
+function TrustScanPanel({ entries }: { entries?: Array<{ seat: number; name: string; locationId: number }> | null }) {
+  if (!entries?.length) return null;
+  return <section className="mp-trust-scan"><header><small>ROUND 03 · VERIFIED PUBLIC DATA</small><h3>긴급 신뢰 스캔</h3><p>서버가 각 플레이어의 안전 장소 카드 한 장을 공개했습니다. 이 정보는 거짓말할 수 없습니다.</p></header><div>{entries.map((entry) => <article key={entry.seat}><img src={locationImage(entry.locationId)} alt=""/><span><small>SEAT {entry.seat + 1} · {entry.name}</small><b>{String(entry.locationId).padStart(2, "0")} · {locationName(entry.locationId)}</b></span></article>)}</div></section>;
 }
 
 function InstitutionCatalog({ catalog, onClose }: { catalog: Array<{ id: number; symbols: Symbols }>; onClose?: () => void }) {
@@ -269,28 +275,29 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   const setAssassinationCard = (index: number, locationId: number) => setAssassinationCards((current) => current.map((value, cardIndex) => cardIndex === index ? locationId : value) as [number, number, number]);
   const latestInvestigation = state.investigationLog?.[state.investigationLog.length - 1];
   const catalog = state.locationCatalog ?? FIXED_LOCATION_CATALOG;
-  const header = <><header className="mp-top"><button type="button" onClick={leaveLocal}>H<span>IX</span></button><div><small>방 {view.room.code} · {realtime} · 온라인 규칙 4.4</small><h1>ZERO HOUR / 라운드 {String(view.room.round).padStart(2, "0")}</h1></div><nav>{view.room.status === "action" ? <strong className="mp-turn-clock">{activePlayer?.name} 차례 · {clockText}</strong> : null}<span>좌석 {view.me.seat + 1} · {view.me.name}</span>{view.room.status !== "lobby" ? <button type="button" onClick={() => setCatalogOpen(true)}>기관 도감</button> : null}<button type="button" onClick={() => setManualOpen(true)}>설명</button><button type="button" onClick={leaveLocal}>나가기</button></nav></header>{manualOpen ? <GameManual onClose={() => setManualOpen(false)}/> : null}</>;
+  const header = <><header className="mp-top"><button type="button" onClick={leaveLocal}>H<span>IX</span></button><div><small>방 {view.room.code} · {realtime} · 온라인 규칙 4.5</small><h1>ZERO HOUR / 라운드 {String(view.room.round).padStart(2, "0")}</h1></div><nav>{view.room.status === "action" ? <strong className="mp-turn-clock">{activePlayer?.name} 차례 · {clockText}</strong> : null}<span>좌석 {view.me.seat + 1} · {view.me.name}</span>{view.room.status !== "lobby" ? <button type="button" onClick={() => setCatalogOpen(true)}>기관 도감</button> : null}<button type="button" onClick={() => setManualOpen(true)}>설명</button><button type="button" onClick={leaveLocal}>나가기</button></nav></header>{manualOpen ? <GameManual onClose={() => setManualOpen(false)}/> : null}</>;
 
   if (view.room.status === "lobby") return <main className="mp-shell">{header}<section className="mp-lobby"><div><p className="mp-kicker">ENCRYPTED ASSEMBLY CODE</p><h2>{view.room.code}</h2><button type="button" onClick={() => void navigator.clipboard.writeText(view.room.code)}>코드 복사</button><p>나머지 플레이어에게 이 코드를 전달하십시오.</p></div><div className="mp-roster"><h3>접속 승무원 · {state.players.length}/4</h3>{[0, 1, 2, 3].map((seat) => { const player = state.players.find((entry) => entry.seat === seat); return <article className={player ? "ready" : ""} key={seat}><b>{String(seat + 1).padStart(2, "0")}</b><span>{player?.name ?? "연결 대기"}</span><small>{player ? "LINKED" : "NO SIGNAL"}</small></article>; })}{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy || state.players.length !== 4} onClick={() => void act("start")}>4인 임무 시작</button> : <p className="mp-wait">방장이 임무를 시작할 때까지 기다리십시오.</p>}</div></section><InstitutionCatalog catalog={FIXED_LOCATION_CATALOG}/>{error ? <div className="mp-toast">{error}</div> : null}</main>;
-  if (state.rulesVersion !== "4.4" || state.mineralTotal !== 30 || !state.fixedCardLayout) return <main className="mp-shell">{header}<section className="mp-gameover spy"><p className="mp-kicker">OLD RULESET DETECTED</p><h2>이전 규칙으로 만든 방입니다.</h2><p>통일 광물 표시와 7회 파괴 규칙을 적용하려면 이 방에서 나간 뒤 새 방을 만들어 주세요.</p><button className="mp-primary" type="button" onClick={leaveLocal}>나가기 · 새 방 만들기</button></section></main>;
+  if (state.rulesVersion !== "4.5" || state.mineralTotal !== 30 || !state.fixedCardLayout) return <main className="mp-shell">{header}<section className="mp-gameover spy"><p className="mp-kicker">OLD RULESET DETECTED</p><h2>이전 규칙으로 만든 방입니다.</h2><p>장소 광물 질문과 스파이 목표 카드 계산을 적용하려면 이 방에서 나간 뒤 새 방을 만들어 주세요.</p><button className="mp-primary" type="button" onClick={leaveLocal}>나가기 · 새 방 만들기</button></section></main>;
   if (!view.secret) return <main className="mp-shell">{header}<div className="mp-center"><div className="mp-loader"/><p>기밀 카드 배분 중…</p></div></main>;
 
   const role = ROLES[view.secret.roleId];
   const handSymbols = addSymbols(...view.secret.hand.map((card) => card.symbols));
-  const roleSymbols = subtractSymbols(view.secret.totals, handSymbols);
+  const targetQuestionSymbols = subtractSymbols(view.secret.totals, handSymbols);
+  const isSpy = view.secret.roleId === "spy";
   const dossier = <aside className={`mp-dossier ${role.alignment}`}>
     <small>{role.english}</small><div className="mp-role-portrait"><img className="mp-role-art" src={roleImage(view.secret.roleId)} alt={`${role.name} 얼굴`}/></div><h2>{role.name}</h2><p>{role.action}</p>
     {view.secret.roleId === "spy" ? view.secret.targetLocationId ? <div className="mp-target-brief"><small>스파이 전용 · 실제 파괴 구역</small><img src={locationImage(view.secret.targetLocationId)} alt="파괴 타깃 구역"/><strong>{String(view.secret.targetLocationId).padStart(2, "0")}</strong><b>{locationName(view.secret.targetLocationId)}</b><p>이 구역을 공격하면 파괴 스택이 올라갑니다. 다른 플레이어 화면에는 표시되지 않습니다.</p></div> : <div className="mp-target-brief missing"><small>OMEGA TARGET SYNC ERROR</small><b>파괴 구역을 불러오는 중입니다. 새로고침하십시오.</b></div> : null}
-    <b>내 카드 4장 · 광물 총합 {total(view.secret.totals)}개</b>
-    <small className="mp-total-breakdown">기관 카드 3장 {total(handSymbols)}개 + 역할 카드 1장 {total(roleSymbols)}개 = 총 {total(view.secret.totals)}개</small>
+    <b>광물 질문에 적용되는 내 장소 카드 {isSpy ? 4 : 3}장 · 총 {total(view.secret.totals)}개</b>
+    <small className="mp-total-breakdown">안전 장소 3장 {total(handSymbols)}개{isSpy ? ` + 비밀 파괴 목표 1장 ${total(targetQuestionSymbols)}개` : ""} = 질문 수량 {total(view.secret.totals)}개</small>
     <SymbolStrip symbols={view.secret.totals} showPool/>
     {view.me.eliminated ? <div className="mp-out">OUT · 관전 모드</div> : null}
     {view.secret.roleId === "spy" ? <div className="mp-spy-log"><small>PRIVATE OMEGA LOG · 스파이에게만 공개</small><p>{view.secret.privateLog ?? "아직 행동 기록이 없습니다."}</p><strong>{view.secret.sabotageProgress ?? 0}/{SABOTAGE_TARGET}</strong></div> : null}
     {view.secret.privateResult?.type === "security" ? <div className="mp-private-result"><small>LOCKED CONFIDENTIAL RESULT</small><p>{SYMBOLS[view.secret.privateResult.symbol].name} {view.secret.privateResult.threshold}개 이상</p><b>{view.secret.privateResult.answer ? "O" : "X"}</b></div> : null}
-    <div className="mp-hand"><small>내 카드 구성 · 역할 1장 + 안전 기관 3장</small><article className="mp-role-hand"><span>역할 카드 · {role.name}</span><SymbolStrip symbols={roleSymbols}/></article>{view.secret.hand.map((card) => <article key={card.id}><img src={locationImage(card.id)} alt="" loading="lazy"/><span>{String(card.id).padStart(2, "0")} · {locationName(card.id)}</span><SymbolStrip symbols={card.symbols}/></article>)}</div>
+    <div className="mp-hand"><small>광물 질문 카드 · {isSpy ? "안전 장소 3장 + 비밀 목표 1장" : "안전 장소 3장"}</small>{isSpy ? <article className="mp-role-hand"><span>질문에서는 내 카드 · {String(view.secret.targetLocationId ?? 0).padStart(2, "0")} {locationName(view.secret.targetLocationId)}</span><SymbolStrip symbols={targetQuestionSymbols}/></article> : null}{view.secret.hand.map((card) => <article key={card.id}><img src={locationImage(card.id)} alt="" loading="lazy"/><span>{String(card.id).padStart(2, "0")} · {locationName(card.id)}</span><SymbolStrip symbols={card.symbols}/></article>)}</div>
     <div className="mp-shared-intel"><small>전 승무원 공유 조사 기록</small><InvestigationLog entries={state.investigationLog ?? []}/></div>
   </aside>;
-  const frame = (content: ReactNode) => <main className="mp-shell">{header}{catalogOpen ? <InstitutionCatalog catalog={catalog} onClose={() => setCatalogOpen(false)}/> : null}<section className="mp-game">{dossier}<div className="mp-stage">{latestInvestigation?.round === view.room.round ? <div className="mp-latest-result"><h3>최근 기본 조사 결과</h3><InvestigationLog entries={[latestInvestigation]}/></div> : null}{content}</div></section><footer className={`mp-role-footer ${role.alignment}`}><small>게임 중 내 역할</small><b>{role.name}</b><span>{role.action}</span><em>{role.alignment === "spy" ? `파괴 공격 ${SABOTAGE_TARGET}회 성공 또는 역추적으로 승리` : "조사 결과를 모아 스파이와 파괴 목표를 함께 체포"}</em></footer>{error ? <div className="mp-toast">{error}</div> : null}</main>;
+  const frame = (content: ReactNode) => <main className="mp-shell">{header}{catalogOpen ? <InstitutionCatalog catalog={catalog} onClose={() => setCatalogOpen(false)}/> : null}<section className="mp-game">{dossier}<div className="mp-stage"><TrustScanPanel entries={state.trustScan}/>{latestInvestigation?.round === view.room.round ? <div className="mp-latest-result"><h3>최근 기본 조사 결과</h3><InvestigationLog entries={[latestInvestigation]}/></div> : null}{content}</div></section><footer className={`mp-role-footer ${role.alignment}`}><small>게임 중 내 역할</small><b>{role.name}</b><span>{role.action}</span><em>{role.alignment === "spy" ? `파괴 공격 ${SABOTAGE_TARGET}회 성공 또는 역추적으로 승리` : "조사 결과를 모아 스파이와 파괴 목표를 함께 체포"}</em></footer>{error ? <div className="mp-toast">{error}</div> : null}</main>;
 
   if (view.room.status === "action") {
     const myTurn = state.activeTurnSeat === view.me.seat;
@@ -332,7 +339,7 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   }
 
   if (view.room.status === "resolving") return frame(<div className="mp-center"><div className="mp-loader"/><h2>4명의 행동 판정 중</h2><p>비밀 타깃과 행동 조건을 서버에서 대조하고 있습니다.</p></div>);
-  if (view.room.status === "resolution") return frame(<div className="mp-resolution"><p className="mp-kicker">라운드 결과</p><h2>라운드 {String(view.room.round).padStart(2, "0")} 판정 완료</h2>{state.spyExposed ? <div className="mp-alert">역추적 실패 · 스파이의 정체가 공개되었습니다.</div> : null}{state.report?.assassination ? <div className={`mp-shot ${state.report.assassination.success ? "success" : "failed"}`}><b>⌖ 역추적</b><h3>{state.report.assassination.success ? `${state.report.assassination.targetName} 탈락` : `실패 · 스파이는 ${state.report.assassination.spyName}`}</h3></div> : null}<div className="mp-resolution-grid"><article><small>구역 잠그기</small><h3>{state.report?.isolation ? `${String(state.report.isolation).padStart(2, "0")} · ${locationName(state.report.isolation)}` : "사용하지 않음"}</h3></article><article><small>현장 확인</small><h3>{state.report?.inspection ? `${String(state.report.inspection).padStart(2, "0")} · ${locationName(state.report.inspection)}` : "사용하지 않음"}</h3>{state.report?.inspection ? <><b>{state.report.detected ? "O" : "X"}</b><p>{state.report.detected ? "목표 구역에서 이번 라운드의 공격을 확인했습니다." : "파괴 흔적 없음"}</p></> : null}</article><article><small>파괴 진행도</small><h3>{view.secret.roleId === "spy" ? `${view.secret.sabotageProgress ?? 0}/${SABOTAGE_TARGET}` : "비공개"}</h3><p>{view.secret.roleId === "spy" ? "나만 볼 수 있습니다." : "스파이 화면에만 표시됩니다."}</p></article></div>{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy} onClick={() => void act("next_round")}>다음 라운드 시작</button> : <p className="mp-wait">방장이 다음 라운드를 시작할 때까지 기다려 주세요.</p>}</div>);
+  if (view.room.status === "resolution") return frame(<div className="mp-resolution"><p className="mp-kicker">라운드 결과</p><h2>라운드 {String(view.room.round).padStart(2, "0")} 판정 완료</h2>{state.spyExposed ? <div className="mp-alert">역추적 실패 · 스파이의 정체가 공개되었습니다.</div> : null}{state.report?.assassination ? <div className={`mp-shot ${state.report.assassination.success ? "success" : "failed"}`}><b>⌖ 역추적</b><h3>{state.report.assassination.success ? `${state.report.assassination.targetName} 탈락` : `실패 · 스파이는 ${state.report.assassination.spyName}`}</h3></div> : null}<div className="mp-resolution-grid"><article><small>구역 잠그기</small><h3>{state.report?.isolation ? `${String(state.report.isolation).padStart(2, "0")} · ${locationName(state.report.isolation)}` : "사용하지 않음"}</h3></article><article><small>현장 확인</small><h3>{state.report?.inspection ? `${String(state.report.inspection).padStart(2, "0")} · ${locationName(state.report.inspection)}` : "사용하지 않음"}</h3>{state.report?.inspection ? <><b>{state.report.detected ? "O" : "X"}</b><p>{state.report.detected ? `목표 공격 확인 · 스파이 질문 광물 총 ${state.report.spyTotal}개` : "파괴 흔적 없음"}</p></> : null}</article><article><small>파괴 진행도</small><h3>{view.secret.roleId === "spy" ? `${view.secret.sabotageProgress ?? 0}/${SABOTAGE_TARGET}` : "비공개"}</h3><p>{view.secret.roleId === "spy" ? "나만 볼 수 있습니다." : "스파이 화면에만 표시됩니다."}</p></article></div>{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy} onClick={() => void act("next_round")}>다음 라운드 시작</button> : <p className="mp-wait">방장이 다음 라운드를 시작할 때까지 기다려 주세요.</p>}</div>);
 
   if (view.room.status === "investigation") {
     const myTurn = state.activeInvestigatorSeat === view.me.seat;

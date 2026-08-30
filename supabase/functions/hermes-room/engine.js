@@ -5,20 +5,20 @@ export const SABOTAGE_TARGET = 7;
 const emptySymbols = () => Object.fromEntries(SYMBOL_KEYS.map((symbol) => [symbol, 0]));
 
 export const ROLES = [
-  { id: "pilot", symbols: { ...emptySymbols(), power: 1 } },
-  { id: "scientist", symbols: { ...emptySymbols(), bio: 1 } },
-  { id: "security", symbols: { ...emptySymbols(), key: 1 } },
-  { id: "spy", symbols: { ...emptySymbols(), quantum: 1 } },
+  { id: "pilot", symbols: emptySymbols() },
+  { id: "scientist", symbols: emptySymbols() },
+  { id: "security", symbols: emptySymbols() },
+  { id: "spy", symbols: emptySymbols() },
 ];
 
 export const LOCATIONS = [
-  { id: 1, symbols: { ...emptySymbols(), power: 2 } },
-  { id: 2, symbols: { ...emptySymbols(), eye: 1, quantum: 1 } },
+  { id: 1, symbols: { ...emptySymbols(), power: 3 } },
+  { id: 2, symbols: { ...emptySymbols(), eye: 1, quantum: 2 } },
   { id: 3, symbols: { ...emptySymbols(), power: 1, quantum: 1 } },
   { id: 4, symbols: { ...emptySymbols(), bio: 2 } },
   { id: 5, symbols: { ...emptySymbols(), eye: 1, quantum: 1 } },
-  { id: 6, symbols: { ...emptySymbols(), key: 1, quantum: 1 } },
-  { id: 7, symbols: { ...emptySymbols(), eye: 1, bio: 1 } },
+  { id: 6, symbols: { ...emptySymbols(), key: 2, quantum: 1 } },
+  { id: 7, symbols: { ...emptySymbols(), eye: 1, bio: 2 } },
   { id: 8, symbols: { ...emptySymbols(), power: 1, bio: 1 } },
   { id: 9, symbols: { ...emptySymbols(), key: 2 } },
   { id: 10, symbols: { ...emptySymbols(), eye: 2 } },
@@ -61,7 +61,8 @@ export function createDeal(members, random = Math.random) {
   const fixedDeck = createRandomizedDeck();
   const locations = shuffled(fixedDeck.locations, random);
   const roles = shuffled(fixedDeck.roles, random);
-  const targetLocationId = locations[0].id;
+  const targetLocation = locations[0];
+  const targetLocationId = targetLocation.id;
   const assignments = [...members].sort((a, b) => a.seat - b.seat).map((member, seat) => {
     const hand = locations.slice(1 + seat * 3, 4 + seat * 3);
     const role = roles[seat];
@@ -70,13 +71,15 @@ export function createDeal(members, random = Math.random) {
       seat: member.seat,
       role_id: role.id,
       hand,
-      totals: addSymbols(role.symbols, ...hand.map((location) => location.symbols)),
+      // Questions count location minerals only. The hidden target behaves as the
+      // spy's fourth location card for every mineral question.
+      totals: addSymbols(...hand.map((location) => location.symbols), ...(role.id === "spy" ? [targetLocation.symbols] : [])),
     };
   });
   return { targetLocationId, assignments, locationCatalog: fixedDeck.locations };
 }
 
-export function resolveRound({ room, members, secrets, actions, targetLocationId, previousDestroyed = 0 }) {
+export function resolveRound({ room, members, secrets, actions, targetLocationId, previousDestroyed = 0, random = Math.random }) {
   const secretByUser = new Map(secrets.map((secret) => [secret.user_id, secret]));
   const actionByUser = new Map(actions.map((entry) => [entry.user_id, entry.action]));
   const activeMembers = members.filter((member) => !member.eliminated);
@@ -98,6 +101,7 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   const succeeded = attacked && !blocked;
   const destroyed = Number(previousDestroyed) + (succeeded ? 1 : 0);
   const detected = attacked && inspection === targetLocationId;
+  const spyTotal = detected ? symbolTotal(spy.secret.totals) : null;
   const secretUpdates = [];
   let eliminatedUserId = null;
   let assassination = null;
@@ -151,6 +155,14 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
     submitted: false,
     eliminated: player.eliminated || members.some((member) => member.seat === player.seat && member.user_id === eliminatedUserId),
   }));
+  let trustScan = Array.isArray(room.public_state.trustScan) ? room.public_state.trustScan : null;
+  if (Number(room.current_round) === 3 && !trustScan) {
+    trustScan = [...members].sort((a, b) => a.seat - b.seat).map((member) => {
+      const safeHand = secretByUser.get(member.user_id)?.hand ?? [];
+      const revealed = safeHand[Math.floor(random() * safeHand.length)];
+      return { seat: member.seat, name: member.name, locationId: Number(revealed?.id ?? 0) };
+    }).filter((entry) => entry.locationId > 0);
+  }
   const livingCrewMembers = members.filter((member) => {
     const secret = secretByUser.get(member.user_id);
     return secret?.role_id !== "spy" && !member.eliminated && member.user_id !== eliminatedUserId;
@@ -175,7 +187,8 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
       players,
       lastIsolation: isolation,
       spyExposed,
-      report: { isolation, inspection, detected, assassination },
+      trustScan,
+      report: { isolation, inspection, detected, spyTotal, assassination },
       question: null,
       broadcastAnswers: null,
       investigationQueue: [],
