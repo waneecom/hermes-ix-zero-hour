@@ -76,13 +76,17 @@ async function loadContext(roomId: string, userId: string) {
 
 async function view(roomId: string, userId: string) {
   const { room, member, secret } = await loadContext(roomId, userId);
+  const safePublicState = { ...(room.public_state as JsonRecord) };
+  delete safePublicState.destroyed;
   let targetLocationId: number | null = null;
+  let sabotageProgress: number | null = null;
   if (secret?.role_id === "spy") {
     const { data } = await admin.from("hermes_ix_room_internal")
-      .select("target_location_id")
+      .select("target_location_id,destroyed")
       .eq("room_id", roomId)
       .maybeSingle();
     targetLocationId = data?.target_location_id ?? null;
+    sabotageProgress = data?.destroyed ?? null;
   }
   return {
     room: {
@@ -91,7 +95,7 @@ async function view(roomId: string, userId: string) {
       status: room.status,
       round: room.current_round,
       revision: room.revision,
-      publicState: room.public_state,
+      publicState: safePublicState,
     },
     me: {
       seat: member.seat,
@@ -106,6 +110,7 @@ async function view(roomId: string, userId: string) {
       privateLog: secret.private_log,
       privateResult: secret.private_result,
       targetLocationId,
+      sabotageProgress,
     } : null,
   };
 }
@@ -153,10 +158,9 @@ async function startRoom(roomId: string, userId: string) {
   if (members.length !== 4) throw new ApiError("4명이 모두 입장해야 시작할 수 있습니다.");
   const deal = createDeal(members);
   const publicState = {
-    rulesVersion: "4.1",
+    rulesVersion: "4.2",
     mineralTotal: 30,
     players: members.map((entry) => ({ seat: entry.seat, name: entry.name, eliminated: false, submitted: false })),
-    destroyed: 0,
     lastIsolation: null,
     spyExposed: false,
     report: null,
@@ -215,7 +219,7 @@ async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRec
   }
   if (roleId === "security") {
     if (action.type === "basic") return basicAction();
-    if (action.type !== "query") throw new ApiError("보안 책임자는 기밀 조회를 제출해야 합니다.");
+    if (action.type !== "query") throw new ApiError("보안 책임자는 기본 조사 또는 보안 비밀 조회를 선택하세요.");
     const threshold = Number(action.threshold);
     if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("조회 기준은 1~20개여야 합니다.");
     return { type: "query", symbol: validSymbol(action.symbol), threshold };
@@ -274,7 +278,7 @@ async function finishAction(roomId: string, room: JsonRecord, userId: string, ac
       roomMembers(roomId),
       admin.from("hermes_ix_player_secrets").select("*").eq("room_id", roomId),
       admin.from("hermes_ix_round_actions").select("*").eq("room_id", roomId).eq("round", room.current_round),
-      admin.from("hermes_ix_room_internal").select("target_location_id").eq("room_id", roomId).single(),
+      admin.from("hermes_ix_room_internal").select("target_location_id,destroyed").eq("room_id", roomId).single(),
     ]);
     if (freshRoom.error || secretsResult.error || actionsResult.error || internalResult.error) throw new ApiError("라운드 판정 데이터를 불러오지 못했습니다.", 500);
     const roomForResolution = {
@@ -290,6 +294,7 @@ async function finishAction(roomId: string, room: JsonRecord, userId: string, ac
       secrets: secretsResult.data,
       actions: actionsResult.data,
       targetLocationId: internalResult.data.target_location_id,
+      previousDestroyed: internalResult.data.destroyed,
     });
     const { error: finalError } = await admin.rpc("hermes_ix_finalize_resolution", {
       p_room_id: roomId,
@@ -297,6 +302,7 @@ async function finishAction(roomId: string, room: JsonRecord, userId: string, ac
       p_status: resolution.status,
       p_eliminated_user_id: resolution.eliminatedUserId,
       p_secret_updates: resolution.secretUpdates,
+      p_destroyed: resolution.destroyed,
     });
     if (finalError) throw finalError;
   } else {
@@ -464,7 +470,7 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
 }
 
 // Kept only so rooms created by older deployments can still be read safely.
-// Ruleset 4.1 does not route requests to these three legacy phase handlers.
+// Ruleset 4.2 does not route requests to these three legacy phase handlers.
 void openInvestigation;
 void privateQuestion;
 void broadcastQuestion;

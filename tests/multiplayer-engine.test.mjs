@@ -7,7 +7,9 @@ const members = [0, 1, 2, 3].map((seat) => ({ room_id: "room", user_id: `u${seat
 
 test("online rules immediately calculate truthful answers for every player", () => {
   const source = fs.readFileSync(new URL("../supabase/functions/hermes-room/index.ts", import.meta.url), "utf8");
-  assert.match(source, /rulesVersion: "4\.1"/);
+  assert.match(source, /rulesVersion: "4\.2"/);
+  assert.match(source, /target_location_id,destroyed/);
+  assert.match(source, /p_destroyed: resolution\.destroyed/);
   assert.match(source, /async function broadcastQuestionLog/);
   assert.match(source, /return finishAction\(roomId, room, userId, action, log\)/);
   assert.doesNotMatch(source, /operation === "broadcast_answer"/);
@@ -55,7 +57,6 @@ function gameState(overrides = {}) {
       current_round: 2,
       public_state: {
         players: members.map((member) => ({ seat: member.seat, name: member.name, eliminated: false, submitted: true })),
-        destroyed: 0,
         lastIsolation: null,
         spyExposed: false,
         investigationLog: [],
@@ -70,6 +71,7 @@ function gameState(overrides = {}) {
       { user_id: "u3", role_id: "spy", totals: { eye: 3, key: 2, power: 4, bio: 1, quantum: 2 } },
     ],
     targetLocationId: 1,
+    previousDestroyed: 0,
   };
 }
 
@@ -80,11 +82,24 @@ test("lockdown blocks sabotage while scientist detects the attempt", () => {
     { user_id: "u2", action: { type: "query", symbol: "eye", threshold: 3 } },
     { user_id: "u3", action: { type: "attack" } },
   ] });
-  assert.equal(result.publicState.destroyed, 0);
+  assert.equal(result.destroyed, 0);
+  assert.equal("destroyed" in result.publicState, false);
   assert.equal(result.publicState.report.detected, true);
   assert.equal(result.publicState.report.spyTotal, 12);
   assert.match(result.secretUpdates.find((entry) => entry.user_id === "u3").private_log, /완전 차단/);
   assert.equal(result.secretUpdates.find((entry) => entry.user_id === "u2").private_result.answer, true);
+});
+
+test("successful sabotage advances only the private progress value", () => {
+  const result = resolveRound({ ...gameState(), previousDestroyed: 4, actions: [
+    { user_id: "u0", action: { type: "basic" } },
+    { user_id: "u1", action: { type: "basic" } },
+    { user_id: "u2", action: { type: "basic" } },
+    { user_id: "u3", action: { type: "attack" } },
+  ] });
+  assert.equal(result.destroyed, 5);
+  assert.equal(result.status, "gameover");
+  assert.equal("destroyed" in result.publicState, false);
 });
 
 test("basic investigation finishes during the player's turn without a later queue", () => {

@@ -83,7 +83,7 @@ export function createDeal(members, random = Math.random) {
   return { targetLocationId, assignments };
 }
 
-export function resolveRound({ room, members, secrets, actions, targetLocationId }) {
+export function resolveRound({ room, members, secrets, actions, targetLocationId, previousDestroyed = 0 }) {
   const secretByUser = new Map(secrets.map((secret) => [secret.user_id, secret]));
   const actionByUser = new Map(actions.map((entry) => [entry.user_id, entry.action]));
   const activeMembers = members.filter((member) => !member.eliminated);
@@ -103,7 +103,7 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   const attacked = spyAction?.type === "attack";
   const blocked = attacked && isolation === targetLocationId;
   const succeeded = attacked && !blocked;
-  const destroyed = Number(room.public_state.destroyed ?? 0) + (succeeded ? 1 : 0);
+  const destroyed = Number(previousDestroyed) + (succeeded ? 1 : 0);
   const detected = attacked && inspection === targetLocationId;
   const spyTotal = detected ? symbolTotal(spy.secret.totals) : null;
   const secretUpdates = [];
@@ -176,12 +176,12 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
 
   return {
     status,
+    destroyed,
     eliminatedUserId,
     secretUpdates,
     publicState: {
       ...room.public_state,
       players,
-      destroyed,
       lastIsolation: isolation,
       spyExposed,
       report: { isolation, inspection, detected, spyTotal, assassination },
