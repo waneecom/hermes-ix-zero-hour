@@ -11,8 +11,7 @@ test("keeps the complete 17-card deck", async () => {
   const roleIds = [...roleSource.matchAll(/\{ id: "(pilot|scientist|security|spy)"/g)].map((match) => match[1]);
   assert.deepEqual(locationIds, Array.from({ length: 13 }, (_, index) => index + 1));
   assert.deepEqual(roleIds, ["pilot", "scientist", "security", "spy"]);
-  assert.match(page, /type SymbolKey = "eye" \| "key" \| "power" \| "bio" \| "quantum"/);
-  assert.match(page, /ITEM_TOTALS: Symbols = \{ eye: 6, key: 6, power: 6, bio: 6, quantum: 6 \}/);
+  assert.match(page, /◉ 10개 · ◆ 10개 · ϟ 12개/);
   assert.match(page, /function createRandomizedDeck/);
   assert.match(page, /createRandomizedDeck\(\)/);
 });

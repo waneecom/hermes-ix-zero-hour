@@ -164,13 +164,6 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
     const secret = secretByUser.get(member.user_id);
     return secret?.role_id !== "spy" && !member.eliminated && member.user_id !== eliminatedUserId;
   }).sort((a, b) => a.seat - b.seat);
-  const investigationQueue = livingCrewMembers
-    .filter((member) => actionByUser.get(member.user_id)?.type === "basic")
-    .map((member) => member.seat);
-  const arrestSeat = livingCrewMembers.length > 0
-    ? livingCrewMembers[(room.current_round - 1) % livingCrewMembers.length].seat
-    : null;
-
   let status = "resolution";
   let result = null;
   if (destroyed >= 5) {
@@ -194,9 +187,11 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
       report: { isolation, inspection, detected, spyTotal, assassination },
       question: null,
       broadcastAnswers: null,
-      investigationQueue,
+      investigationQueue: [],
       activeInvestigatorSeat: null,
-      arrestSeat,
+      activeTurnSeat: null,
+      turnDeadline: null,
+      arrestSeat: null,
       investigationLog: room.public_state.investigationLog ?? [],
       result,
     },

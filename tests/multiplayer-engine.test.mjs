@@ -78,15 +78,17 @@ test("lockdown blocks sabotage while scientist detects the attempt", () => {
   assert.equal(result.secretUpdates.find((entry) => entry.user_id === "u2").private_result.answer, true);
 });
 
-test("crew choosing basic investigation enter the shared queue", () => {
+test("basic investigation finishes during the player's turn without a later queue", () => {
   const result = resolveRound({ ...gameState(), actions: [
     { user_id: "u0", action: { type: "basic" } },
     { user_id: "u1", action: { type: "basic" } },
     { user_id: "u2", action: { type: "query", symbol: "quantum", threshold: 2 } },
     { user_id: "u3", action: { type: "wait" } },
   ] });
-  assert.deepEqual(result.publicState.investigationQueue, [0, 1]);
-  assert.equal(result.publicState.arrestSeat, 1);
+  assert.deepEqual(result.publicState.investigationQueue, []);
+  assert.equal(result.publicState.arrestSeat, null);
+  assert.equal(result.publicState.activeTurnSeat, null);
+  assert.equal(result.publicState.turnDeadline, null);
   assert.equal(result.secretUpdates.find((entry) => entry.user_id === "u2").private_result.answer, true);
 });
 

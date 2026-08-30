@@ -11,6 +11,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const TURN_DURATION_MS = 120_000;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -152,6 +153,8 @@ async function startRoom(roomId: string, userId: string) {
   if (members.length !== 4) throw new ApiError("4명이 모두 입장해야 시작할 수 있습니다.");
   const deal = createDeal(members);
   const publicState = {
+    rulesVersion: "4.0",
+    mineralTotal: 30,
     players: members.map((entry) => ({ seat: entry.seat, name: entry.name, eliminated: false, submitted: false })),
     destroyed: 0,
     lastIsolation: null,
@@ -164,6 +167,10 @@ async function startRoom(roomId: string, userId: string) {
     investigationQueue: [],
     investigationLog: [],
     arrestSeat: null,
+    activeTurnSeat: members[0].seat,
+    turnDeadline: Date.now() + TURN_DURATION_MS,
+    turnDurationSeconds: 120,
+    turnNotice: null,
   };
   const { error } = await admin.rpc("hermes_ix_start_room", {
     p_room_id: roomId,
@@ -178,8 +185,22 @@ async function startRoom(roomId: string, userId: string) {
 
 async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRecord, action: JsonRecord) {
   const roleId = String(secret.role_id);
+  const basicAction = () => {
+    if (action.type !== "basic") return null;
+    const question = validateQuestion((action.question ?? {}) as JsonRecord);
+    const mode = String((action.question as JsonRecord)?.mode);
+    if (mode !== "targeted" && mode !== "broadcast") throw new ApiError("한 명 조사 또는 모두 조사를 선택하세요.");
+    return {
+      type: "basic",
+      question: {
+        mode,
+        ...question,
+        targetSeat: mode === "targeted" ? Number((action.question as JsonRecord)?.targetSeat) : null,
+      },
+    };
+  };
   if (roleId === "pilot") {
-    if (action.type === "basic") return { type: "basic" };
+    if (action.type === "basic") return basicAction();
     if (Number(room.current_round) % 2 !== 0) throw new ApiError("락다운은 자신의 2·4·6…번째 턴에만 사용할 수 있습니다.");
     if (action.type !== "isolate") throw new ApiError("조종사는 락다운을 제출해야 합니다.");
     const locationId = validLocation(action.locationId);
@@ -187,13 +208,13 @@ async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRec
     return { type: "isolate", locationId };
   }
   if (roleId === "scientist") {
-    if (action.type === "basic") return { type: "basic" };
+    if (action.type === "basic") return basicAction();
     if (Number(room.current_round) % 2 !== 0) throw new ApiError("현장 감식은 자신의 2·4·6…번째 턴에만 사용할 수 있습니다.");
     if (action.type !== "inspect") throw new ApiError("과학자는 감식 구역을 제출해야 합니다.");
     return { type: "inspect", locationId: validLocation(action.locationId) };
   }
   if (roleId === "security") {
-    if (action.type === "basic") return { type: "basic" };
+    if (action.type === "basic") return basicAction();
     if (action.type !== "query") throw new ApiError("보안 책임자는 기밀 조회를 제출해야 합니다.");
     const threshold = Number(action.threshold);
     if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("조회 기준은 1~20개여야 합니다.");
@@ -218,11 +239,24 @@ async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRec
   };
 }
 
-async function submitAction(roomId: string, userId: string, rawAction: JsonRecord) {
-  const { room, secret } = await loadContext(roomId, userId);
-  if (room.status !== "action") throw new ApiError("현재는 행동 제출 단계가 아닙니다.");
-  if (!secret) throw new ApiError("비밀 역할이 아직 배분되지 않았습니다.");
-  const action = await normalizeAction(roomId, room, secret, rawAction);
+function validateQuestion(body: JsonRecord) {
+  const threshold = Number(body.threshold);
+  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("기준 개수는 1~20개여야 합니다.");
+  return { symbol: validSymbol(body.symbol), threshold };
+}
+
+function nextTurnSeat(publicState: JsonRecord) {
+  const players = Array.isArray(publicState.players) ? publicState.players as JsonRecord[] : [];
+  const next = players.find((player) => !player.eliminated && !player.submitted);
+  return next ? Number(next.seat) : null;
+}
+
+function appendLog(publicState: JsonRecord, log: JsonRecord | null) {
+  const entries = Array.isArray(publicState.investigationLog) ? publicState.investigationLog : [];
+  return log ? [...entries, log] : entries;
+}
+
+async function finishAction(roomId: string, room: JsonRecord, userId: string, action: JsonRecord, log: JsonRecord | null = null) {
   const { data, error } = await admin.rpc("hermes_ix_store_action", {
     p_room_id: roomId,
     p_round: room.current_round,
@@ -230,7 +264,7 @@ async function submitAction(roomId: string, userId: string, rawAction: JsonRecor
     p_action: action,
   });
   if (error) {
-    if (error.code === "23505") throw new ApiError("이미 이번 라운드 행동을 제출했습니다.", 409);
+    if (error.code === "23505") throw new ApiError("이미 이번 라운드 행동을 끝냈습니다.", 409);
     throw error;
   }
 
@@ -243,8 +277,15 @@ async function submitAction(roomId: string, userId: string, rawAction: JsonRecor
       admin.from("hermes_ix_room_internal").select("target_location_id").eq("room_id", roomId).single(),
     ]);
     if (freshRoom.error || secretsResult.error || actionsResult.error || internalResult.error) throw new ApiError("라운드 판정 데이터를 불러오지 못했습니다.", 500);
+    const roomForResolution = {
+      ...freshRoom.data,
+      public_state: {
+        ...freshRoom.data.public_state,
+        investigationLog: appendLog(freshRoom.data.public_state, log),
+      },
+    };
     const resolution = resolveRound({
-      room: freshRoom.data,
+      room: roomForResolution,
       members,
       secrets: secretsResult.data,
       actions: actionsResult.data,
@@ -258,7 +299,75 @@ async function submitAction(roomId: string, userId: string, rawAction: JsonRecor
       p_secret_updates: resolution.secretUpdates,
     });
     if (finalError) throw finalError;
+  } else {
+    const freshRoom = await admin.from("hermes_ix_rooms").select("*").eq("id", roomId).single();
+    if (freshRoom.error) throw freshRoom.error;
+    const activeTurnSeat = nextTurnSeat(freshRoom.data.public_state);
+    await updateRoom(freshRoom.data, {
+      status: "action",
+      public_state: {
+        ...freshRoom.data.public_state,
+        activeTurnSeat,
+        turnDeadline: Date.now() + TURN_DURATION_MS,
+        question: null,
+        broadcastAnswers: null,
+        turnNotice: action.type === "timeout" ? freshRoom.data.public_state.turnNotice : null,
+        investigationLog: appendLog(freshRoom.data.public_state, log),
+      },
+    });
   }
+  return view(roomId, userId);
+}
+
+async function targetedQuestionLog(roomId: string, room: JsonRecord, member: JsonRecord, question: JsonRecord) {
+  const members = await roomMembers(roomId);
+  const target = members.find((entry) => entry.seat === Number(question.targetSeat) && !entry.eliminated && entry.user_id !== member.user_id);
+  if (!target) throw new ApiError("조사할 다른 플레이어를 선택하세요.");
+  const { data: targetSecret, error } = await admin.from("hermes_ix_player_secrets")
+    .select("totals").eq("room_id", roomId).eq("user_id", target.user_id).single();
+  if (error) throw error;
+  const answer = Number(targetSecret.totals[String(question.symbol)] ?? 0) >= Number(question.threshold);
+  return {
+    round: room.current_round,
+    investigatorSeat: member.seat,
+    investigatorName: member.name,
+    mode: "targeted",
+    targetSeat: target.seat,
+    targetName: target.name,
+    symbol: question.symbol,
+    threshold: question.threshold,
+    answers: [{ seat: target.seat, name: target.name, answer }],
+  };
+}
+
+async function submitAction(roomId: string, userId: string, rawAction: JsonRecord) {
+  const { room, member, secret } = await loadContext(roomId, userId);
+  if (room.status !== "action") throw new ApiError("지금은 행동을 선택할 때가 아닙니다.");
+  if (Number(room.public_state.activeTurnSeat) !== Number(member.seat)) throw new ApiError("지금은 다른 플레이어의 차례입니다.", 403);
+  if (!secret) throw new ApiError("비밀 역할이 아직 배분되지 않았습니다.");
+  const action = await normalizeAction(roomId, room, secret, rawAction) as JsonRecord;
+  if (action.type !== "basic") return finishAction(roomId, room, userId, action);
+
+  const question = action.question as JsonRecord;
+  if (question.mode === "targeted") {
+    const log = await targetedQuestionLog(roomId, room, member, question);
+    return finishAction(roomId, room, userId, action, log);
+  }
+
+  await updateRoom(room, {
+    status: "broadcast",
+    public_state: {
+      ...room.public_state,
+      question: {
+        mode: "broadcast",
+        symbol: question.symbol,
+        threshold: question.threshold,
+        investigatorSeat: member.seat,
+        investigatorName: member.name,
+      },
+      broadcastAnswers: null,
+    },
+  });
   return view(roomId, userId);
 }
 
@@ -280,12 +389,6 @@ async function openInvestigation(roomId: string, userId: string) {
     },
   });
   return view(roomId, userId);
-}
-
-function validateQuestion(body: JsonRecord) {
-  const threshold = Number(body.threshold);
-  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) throw new ApiError("질문 기준은 1~20개여야 합니다.");
-  return { symbol: validSymbol(body.symbol), threshold };
 }
 
 function advanceInvestigation(publicState: JsonRecord, currentSeat: number) {
@@ -348,10 +451,13 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
   return view(roomId, userId);
 }
 
-async function broadcastAnswer(roomId: string, userId: string, answer: unknown) {
-  const { room, secret } = await loadContext(roomId, userId);
-  if (room.status !== "broadcast" || secret?.role_id !== "spy") throw new ApiError("스파이만 방송 응답을 선택할 수 있습니다.", 403);
-  if (typeof answer !== "boolean") throw new ApiError("O 또는 X를 선택하십시오.");
+// Kept only so rooms created by older deployments can still be read safely.
+// Ruleset 4.0 does not route requests to these three legacy phase handlers.
+void openInvestigation;
+void privateQuestion;
+void broadcastQuestion;
+
+async function completeBroadcast(roomId: string, room: JsonRecord, answer: boolean) {
   const question = room.public_state.question;
   const [members, secretsResult] = await Promise.all([
     roomMembers(roomId),
@@ -374,23 +480,51 @@ async function broadcastAnswer(roomId: string, userId: string, answer: unknown) 
     threshold: question.threshold,
     answers,
   };
-  const next = advanceInvestigation(room.public_state, investigatorSeat);
-  await updateRoom(room, {
-    status: next.status,
+  const investigator = members.find((entry) => entry.seat === investigatorSeat && !entry.eliminated);
+  if (!investigator) throw new ApiError("질문한 플레이어를 찾을 수 없습니다.");
+  const action = {
+    type: "basic",
+    question: { mode: "broadcast", symbol: question.symbol, threshold: question.threshold, targetSeat: null },
+  };
+  const actionRoom = await updateRoom(room, {
+    status: "action",
     public_state: {
       ...room.public_state,
-      activeInvestigatorSeat: next.activeInvestigatorSeat,
       question: null,
       broadcastAnswers: null,
-      investigationLog: [...(Array.isArray(room.public_state.investigationLog) ? room.public_state.investigationLog : []), log],
     },
   });
-  return view(roomId, userId);
+  return finishAction(roomId, actionRoom, investigator.user_id, action, log);
+}
+
+async function broadcastAnswer(roomId: string, userId: string, answer: unknown) {
+  const { room, secret } = await loadContext(roomId, userId);
+  if (room.status !== "broadcast" || secret?.role_id !== "spy") throw new ApiError("스파이만 모두 조사에 답할 수 있습니다.", 403);
+  if (typeof answer !== "boolean") throw new ApiError("O 또는 X를 선택하세요.");
+  return completeBroadcast(roomId, room, answer);
+}
+
+async function handleTimeout(roomId: string, userId: string) {
+  const { room } = await loadContext(roomId, userId);
+  if (room.status !== "action" && room.status !== "broadcast") throw new ApiError("지금은 시간 제한을 확인할 단계가 아닙니다.", 409);
+  const deadline = Number(room.public_state.turnDeadline ?? 0);
+  if (!deadline || Date.now() < deadline) throw new ApiError("아직 제한 시간이 남아 있습니다.", 409);
+  const members = await roomMembers(roomId);
+  const activeSeat = Number(room.public_state.activeTurnSeat);
+  const activeMember = members.find((entry) => entry.seat === activeSeat && !entry.eliminated);
+  if (!activeMember) throw new ApiError("현재 차례의 플레이어를 찾을 수 없습니다.", 409);
+  const notice = `${activeMember.name}의 2분이 끝나 행동 없이 다음 차례로 넘어갔습니다.`;
+  const timeoutRoom = await updateRoom(room, {
+    public_state: { ...room.public_state, turnNotice: notice },
+  });
+  if (room.status === "broadcast") return completeBroadcast(roomId, timeoutRoom, false);
+  return finishAction(roomId, timeoutRoom, activeMember.user_id, { type: "timeout" });
 }
 
 async function arrest(roomId: string, userId: string, body: JsonRecord) {
   const { room, member, secret } = await loadContext(roomId, userId);
-  if (room.status !== "arrest" || Number(room.public_state.activeInvestigatorSeat) !== member.seat) throw new ApiError("현재 수사 담당자만 체포를 선언할 수 있습니다.", 403);
+  if (room.status !== "action" || Number(room.public_state.activeTurnSeat) !== member.seat) throw new ApiError("자신의 차례에 체포를 선언할 수 있습니다.", 403);
+  if (member.eliminated) throw new ApiError("탈락한 플레이어는 체포를 선언할 수 없습니다.", 403);
   if (secret?.role_id === "spy") throw new ApiError("스파이는 체포를 선언할 수 없습니다.", 403);
   const suspectSeat = Number(body.suspectSeat);
   const locationId = validLocation(body.locationId);
@@ -418,8 +552,9 @@ async function arrest(roomId: string, userId: string, body: JsonRecord) {
 async function nextRound(roomId: string, userId: string) {
   const { room } = await loadContext(roomId, userId);
   if (room.host_user_id !== userId) throw new ApiError("방장만 다음 라운드를 시작할 수 있습니다.", 403);
-  if (room.status !== "arrest") throw new ApiError("체포 판단이 끝난 뒤 다음 라운드로 이동할 수 있습니다.");
+  if (room.status !== "resolution") throw new ApiError("이번 라운드 결과를 확인한 뒤 다음 라운드로 이동할 수 있습니다.");
   const players = room.public_state.players.map((player: JsonRecord) => ({ ...player, submitted: false }));
+  const firstPlayer = players.find((player: JsonRecord) => !player.eliminated);
   const { error } = await admin.from("hermes_ix_player_secrets").update({ private_result: null }).eq("room_id", roomId);
   if (error) throw error;
   await updateRoom(room, {
@@ -434,6 +569,9 @@ async function nextRound(roomId: string, userId: string) {
       arrestSeat: null,
       question: null,
       broadcastAnswers: null,
+      activeTurnSeat: firstPlayer ? Number(firstPlayer.seat) : null,
+      turnDeadline: Date.now() + TURN_DURATION_MS,
+      turnNotice: null,
     },
   });
   return view(roomId, userId);
@@ -453,10 +591,8 @@ Deno.serve(async (req: Request) => {
     else if (operation === "view") data = await view(roomId, user.id);
     else if (operation === "start") data = await startRoom(roomId, user.id);
     else if (operation === "action") data = await submitAction(roomId, user.id, (body.action ?? {}) as JsonRecord);
-    else if (operation === "investigate") data = await openInvestigation(roomId, user.id);
-    else if (operation === "private_question") data = await privateQuestion(roomId, user.id, body);
-    else if (operation === "broadcast_question") data = await broadcastQuestion(roomId, user.id, body);
     else if (operation === "broadcast_answer") data = await broadcastAnswer(roomId, user.id, body.answer);
+    else if (operation === "timeout") data = await handleTimeout(roomId, user.id);
     else if (operation === "arrest") data = await arrest(roomId, user.id, body);
     else if (operation === "next_round") data = await nextRound(roomId, user.id);
     else throw new ApiError("지원하지 않는 요청입니다.");

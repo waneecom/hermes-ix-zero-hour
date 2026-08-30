@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ensureAnonymousSession, isSupabaseConfigured, supabase } from "./supabase";
+import GameManual from "./GameManual";
 import "./multiplayer.css";
 
 type SymbolKey = "eye" | "key" | "power" | "bio" | "quantum";
@@ -17,12 +18,14 @@ type Report = {
   assassination?: { targetSeat: number | null; targetName: string; success: boolean; spySeat?: number; spyName?: string } | null;
 };
 type PublicState = {
+  rulesVersion?: string; mineralTotal?: number;
   players: PublicPlayer[]; destroyed: number; lastIsolation: number | null; spyExposed: boolean; report: Report | null;
   result: { winner: "crew" | "spy"; reason: string; spySeat: number; targetLocationId: number } | null;
   activeInvestigatorSeat: number | null; arrestSeat: number | null; investigationQueue: number[];
   investigationLog: InvestigationEntry[];
   question: { mode: "broadcast"; symbol: SymbolKey; threshold: number; investigatorSeat: number; investigatorName: string } | null;
   broadcastAnswers: Array<{ seat: number; name: string; answer: boolean }> | null;
+  activeTurnSeat: number | null; turnDeadline: number | null; turnDurationSeconds?: number; turnNotice?: string | null;
 };
 type RoomView = {
   room: { id: string; code: string; status: RoomStatus; round: number; revision: number; publicState: PublicState };
@@ -127,6 +130,10 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   const [questionTarget, setQuestionTarget] = useState(0);
   const [suspectSeat, setSuspectSeat] = useState(0);
   const [accusedLocation, setAccusedLocation] = useState(1);
+  const [crewChoice, setCrewChoice] = useState<"basic" | "special" | "query" | "arrest">("basic");
+  const [clockNow, setClockNow] = useState(0);
+  const [manualOpen, setManualOpen] = useState(false);
+  const timeoutKey = useRef("");
 
   const invoke = useCallback(async (operation: string, payload: Record<string, unknown> = {}, silent = false) => {
     if (!supabase) throw new Error("Supabase 환경 변수가 설정되지 않았습니다.");
@@ -188,9 +195,24 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   const join = async () => { try { await invoke("join", { name, code }); } catch (reason) { setError(reason instanceof Error ? reason.message : "방 참가 실패"); } };
   const leaveLocal = () => { localStorage.removeItem("hermes-room-id"); setView(null); setError(""); };
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const deadline = Number(view?.room.publicState.turnDeadline ?? 0);
+    const status = view?.room.status;
+    if (!view?.room.id || !deadline || (status !== "action" && status !== "broadcast") || clockNow < deadline) return;
+    const key = `${view.room.id}-${view.room.revision}-${deadline}`;
+    if (timeoutKey.current === key) return;
+    timeoutKey.current = key;
+    void invoke("timeout", { roomId: view.room.id }, true).catch(() => undefined);
+  }, [clockNow, invoke, view?.room.id, view?.room.revision, view?.room.status, view?.room.publicState.turnDeadline]);
+
   if (!ready) return <main className="mp-shell"><div className="mp-center"><div className="mp-loader"/><p>HERMES NETWORK 인증 중…</p></div></main>;
   if (!view) return <main className="mp-shell">
-    <header className="mp-top"><button type="button" onClick={onExit}>H<span>IX</span></button><div><small>RULESET 3.1 · 5 MINERALS · TOTAL 30</small><h1>ZERO HOUR / LINK</h1></div></header>
+    <header className="mp-top"><button type="button" onClick={onExit}>H<span>IX</span></button><div><small>온라인 4인 · 광물 5종 · 총 30개 · 차례당 2분</small><h1>ZERO HOUR / LINK</h1></div><nav><button type="button" onClick={() => setManualOpen(true)}>게임 설명</button></nav></header>{manualOpen ? <GameManual onClose={() => setManualOpen(false)}/> : null}
     <section className="mp-entry"><div className="mp-entry-intro"><img src={`${ART_ROOT}/hero.jpg`} alt="헤르메스-IX 함선"/><p className="mp-kicker">4 DEVICES · ONE MISSION</p><h2>각자의 화면으로<br/><em>동시에 접속.</em></h2><p>광물은 5종, 전체 30개입니다. 방장이 6자리 코드를 만들고 나머지 3명이 참가합니다. 역할과 손패는 각자의 기기에만 표시됩니다.</p></div>
       <div className="mp-entry-panel"><label><span>CALLSIGN · 플레이어 이름</span><input value={name} maxLength={16} onChange={(event) => setName(event.target.value)} placeholder="이름 입력"/></label><button className="mp-primary" type="button" disabled={busy || !name.trim()} onClick={create}>새 작전실 생성</button><div className="mp-divider"><span>OR JOIN EXISTING ROOM</span></div><label><span>ACCESS CODE · 6자리</span><input className="mp-code-input" value={code} maxLength={6} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="ABC123"/></label><button className="mp-secondary" type="button" disabled={busy || !name.trim() || code.length !== 6} onClick={join}>코드로 참가</button>{error ? <p className="mp-error">{error}</p> : null}</div>
     </section>
@@ -198,15 +220,18 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
 
   const state = view.room.publicState;
   const myPublic = state.players.find((player) => player.seat === view.me.seat);
-  const activePlayer = state.players.find((player) => player.seat === state.activeInvestigatorSeat);
+  const activePlayer = state.players.find((player) => player.seat === state.activeTurnSeat);
+  const secondsLeft = clockNow > 0 ? Math.max(0, Math.ceil((Number(state.turnDeadline ?? 0) - clockNow) / 1000)) : Number(state.turnDurationSeconds ?? 120);
+  const clockText = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`;
   const aliveOthers = state.players.filter((player) => !player.eliminated && player.seat !== view.me.seat);
   const firstOtherSeat = aliveOthers[0]?.seat ?? 0;
   const validTargetSeat = aliveOthers.some((player) => player.seat === targetSeat) ? targetSeat : firstOtherSeat;
   const validQuestionTarget = aliveOthers.some((player) => player.seat === questionTarget) ? questionTarget : firstOtherSeat;
   const validSuspectSeat = aliveOthers.some((player) => player.seat === suspectSeat) ? suspectSeat : firstOtherSeat;
-  const header = <header className="mp-top"><button type="button" onClick={leaveLocal}>H<span>IX</span></button><div><small>ROOM {view.room.code} · {realtime} · RULESET 3.1 / 30</small><h1>ZERO HOUR / CYCLE {String(view.room.round).padStart(2, "0")}</h1></div><nav><span>SEAT {String(view.me.seat + 1).padStart(2, "0")} · {view.me.name}</span><button type="button" onClick={leaveLocal}>나가기</button></nav></header>;
+  const header = <><header className="mp-top"><button type="button" onClick={leaveLocal}>H<span>IX</span></button><div><small>방 {view.room.code} · {realtime} · 온라인 규칙 4.0</small><h1>ZERO HOUR / 라운드 {String(view.room.round).padStart(2, "0")}</h1></div><nav>{(view.room.status === "action" || view.room.status === "broadcast") ? <strong className="mp-turn-clock">{activePlayer?.name} 차례 · {clockText}</strong> : null}<span>좌석 {view.me.seat + 1} · {view.me.name}</span><button type="button" onClick={() => setManualOpen(true)}>설명</button><button type="button" onClick={leaveLocal}>나가기</button></nav></header>{manualOpen ? <GameManual onClose={() => setManualOpen(false)}/> : null}</>;
 
   if (view.room.status === "lobby") return <main className="mp-shell">{header}<section className="mp-lobby"><div><p className="mp-kicker">ENCRYPTED ASSEMBLY CODE</p><h2>{view.room.code}</h2><button type="button" onClick={() => void navigator.clipboard.writeText(view.room.code)}>코드 복사</button><p>나머지 플레이어에게 이 코드를 전달하십시오.</p></div><div className="mp-roster"><h3>접속 승무원 · {state.players.length}/4</h3>{[0, 1, 2, 3].map((seat) => { const player = state.players.find((entry) => entry.seat === seat); return <article className={player ? "ready" : ""} key={seat}><b>{String(seat + 1).padStart(2, "0")}</b><span>{player?.name ?? "연결 대기"}</span><small>{player ? "LINKED" : "NO SIGNAL"}</small></article>; })}{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy || state.players.length !== 4} onClick={() => void act("start")}>4인 임무 시작</button> : <p className="mp-wait">방장이 임무를 시작할 때까지 기다리십시오.</p>}</div></section>{error ? <div className="mp-toast">{error}</div> : null}</main>;
+  if (state.rulesVersion !== "4.0" || state.mineralTotal !== 30) return <main className="mp-shell">{header}<section className="mp-gameover spy"><p className="mp-kicker">OLD RULESET DETECTED</p><h2>이전 규칙으로 만든 방입니다.</h2><p>새로운 온라인 차례와 2분 제한을 적용하려면 이 방에서 나간 뒤 새 방을 만들어 주세요.</p><button className="mp-primary" type="button" onClick={leaveLocal}>나가기 · 새 방 만들기</button></section></main>;
   if (!view.secret) return <main className="mp-shell">{header}<div className="mp-center"><div className="mp-loader"/><p>기밀 카드 배분 중…</p></div></main>;
 
   const role = ROLES[view.secret.roleId];
@@ -225,6 +250,25 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   const frame = (content: ReactNode) => <main className="mp-shell">{header}<section className="mp-game">{dossier}<div className="mp-stage">{content}</div></section>{error ? <div className="mp-toast">{error}</div> : null}</main>;
 
   if (view.room.status === "action") {
+    const myTurn = state.activeTurnSeat === view.me.seat;
+    if (view.me.eliminated) return frame(<div className="mp-center"><h2>이번 게임에서 탈락했습니다.</h2><p>내 카드와 다른 플레이어의 공개 조사 기록은 계속 볼 수 있습니다.</p></div>);
+    if (!myTurn) return frame(<div className="mp-center"><div className="mp-loader"/><p className="mp-kicker">다른 플레이어 차례</p><h2>{activePlayer?.name}님이 선택하고 있습니다.</h2><strong className="mp-large-clock">{clockText}</strong><p>내 차례가 오면 카드와 광물은 왼쪽에서 다시 확인할 수 있습니다.</p>{state.turnNotice ? <p className="mp-warning">{state.turnNotice}</p> : null}</div>);
+
+    if (view.secret.roleId === "spy") return frame(<div className="mp-console"><p className="mp-kicker">내 차례 · 남은 시간 {clockText}</p><h2>스파이 행동 하나를 고르세요.</h2><p className="mp-help">목표 구역은 왼쪽 카드에 표시됩니다. 선택을 끝내면 다음 사람 차례로 넘어갑니다.</p><div className="mp-spy-choices"><button type="button" className={spyChoice === "attack" ? "selected" : ""} onClick={() => setSpyChoice("attack")}><b>ϟ</b><span>파괴 공격</span></button><button type="button" className={spyChoice === "wait" ? "selected" : ""} onClick={() => setSpyChoice("wait")}><b>○</b><span>조용히 있기</span></button><button type="button" className={spyChoice === "assassinate" ? "selected" : ""} onClick={() => setSpyChoice("assassinate")}><b>⌖</b><span>역추적</span></button></div>{spyChoice === "assassinate" ? <div className="mp-assassinate"><p>상대의 광물 총합과 이번 라운드 직업 행동을 모두 맞히면 상대가 탈락합니다. 하나라도 틀리면 내가 스파이라는 사실이 공개됩니다.</p><label><span>목표 승무원</span><select value={validTargetSeat} onChange={(event) => setTargetSeat(Number(event.target.value))}>{aliveOthers.map((player) => <option value={player.seat} key={player.seat}>{player.name}</option>)}</select></label><label><span>카드 4장의 광물 총합</span><input type="number" min="1" max="20" value={totalGuess} onChange={(event) => setTotalGuess(Number(event.target.value))}/></label><label><span>조종사·과학자가 고른 구역</span><select value={locationGuess} onChange={(event) => setLocationGuess(Number(event.target.value))}>{LOCATIONS.map(([id, location]) => <option value={id} key={id}>{String(id).padStart(2, "0")} · {location}</option>)}</select></label><label><span>보안 책임자가 조회한 광물</span><select value={symbolGuess} onChange={(event) => setSymbolGuess(event.target.value as SymbolKey)}>{symbolKeys.map((key) => <option value={key} key={key}>{SYMBOLS[key].icon} {SYMBOLS[key].name}</option>)}</select></label></div> : null}<button className="mp-primary danger" type="button" disabled={busy} onClick={() => void act("action", { action: spyChoice === "assassinate" ? { type: spyChoice, targetSeat: validTargetSeat, totalGuess, locationGuess, symbolGuess } : { type: spyChoice } })}>이 행동으로 확정</button></div>);
+
+    const specialAvailable = view.room.round % 2 === 0 && (view.secret.roleId === "pilot" || view.secret.roleId === "scientist");
+    const specialLabel = view.secret.roleId === "pilot" ? "구역 잠그기" : "현장 확인";
+    const cooldown = view.secret.roleId === "pilot" ? state.lastIsolation : null;
+    const validLocation = selectedLocation === cooldown ? (selectedLocation === 1 ? 2 : 1) : selectedLocation;
+    return frame(<div className="mp-console"><p className="mp-kicker">내 차례 · 남은 시간 {clockText}</p><h2>이번 차례에 무엇을 할까요?</h2><p className="mp-help">아래 행동 중 하나만 고릅니다. 기본 조사는 질문까지 정한 뒤 바로 결과가 공개됩니다. 체포는 자신 있을 때 언제든 고를 수 있지만, 하나라도 틀리면 스파이가 즉시 이깁니다.</p><div className="mp-turn-choices"><button type="button" className={crewChoice === "basic" ? "selected" : ""} onClick={() => setCrewChoice("basic")}>기본 조사</button>{specialAvailable ? <button type="button" className={crewChoice === "special" ? "selected" : ""} onClick={() => setCrewChoice("special")}>{specialLabel}</button> : null}{view.secret.roleId === "security" ? <button type="button" className={crewChoice === "query" ? "selected" : ""} onClick={() => setCrewChoice("query")}>비밀 조회</button> : null}<button type="button" className={crewChoice === "arrest" ? "selected danger" : "danger"} onClick={() => setCrewChoice("arrest")}>스파이 체포</button></div>
+      {crewChoice === "basic" ? <div className="mp-question"><h3>기본 조사 질문 만들기</h3><div className="mp-mode"><button type="button" className={questionMode === "targeted" ? "selected" : ""} onClick={() => setQuestionMode("targeted")}>한 명 조사</button><button type="button" className={questionMode === "broadcast" ? "selected" : ""} onClick={() => setQuestionMode("broadcast")}>모두 조사</button></div><p>{questionMode === "targeted" ? "고른 사람은 반드시 진실로 O 또는 X가 공개됩니다." : "모든 사람의 O/X가 공개됩니다. 단, 스파이는 거짓 답을 고를 수 있습니다."}</p><SymbolPicker value={querySymbol} onChange={setQuerySymbol}/><label className="mp-range"><span>몇 개 이상인지 질문</span><input type="number" min="1" max="20" value={queryThreshold} onChange={(event) => setQueryThreshold(Number(event.target.value))}/><b>{queryThreshold}개 이상</b></label>{questionMode === "targeted" ? <label><span>조사할 사람</span><select value={validQuestionTarget} onChange={(event) => setQuestionTarget(Number(event.target.value))}>{aliveOthers.map((player) => <option value={player.seat} key={player.seat}>{player.name}</option>)}</select></label> : null}<button className="mp-primary" type="button" disabled={busy} onClick={() => void act("action", { action: { type: "basic", question: { mode: questionMode, symbol: querySymbol, threshold: queryThreshold, targetSeat: validQuestionTarget } } })}>질문 확정하고 조사하기</button></div> : null}
+      {crewChoice === "special" && specialAvailable ? <div className="mp-special-panel"><h3>{specialLabel}</h3><p>{view.secret.roleId === "pilot" ? "이번 라운드 동안 한 구역을 막습니다. 바로 전 라운드에 막은 구역은 다시 고를 수 없습니다." : "스파이가 이번 라운드에 이 구역을 공격했는지 O/X로 확인합니다."}</p><LocationPicker value={validLocation} onChange={setSelectedLocation} disabled={cooldown}/><button className="mp-primary" type="button" disabled={busy} onClick={() => void act("action", { action: { type: view.secret!.roleId === "pilot" ? "isolate" : "inspect", locationId: validLocation } })}>{specialLabel} 확정</button></div> : null}
+      {crewChoice === "query" && view.secret.roleId === "security" ? <div className="mp-confidential"><h3>스파이 광물 비밀 조회</h3><p>광물 종류와 기준 개수를 정하면 스파이가 실제로 그만큼 가지고 있는지 나에게만 O/X가 보입니다. 확정 뒤에는 바꿀 수 없습니다.</p><SymbolPicker value={querySymbol} onChange={setQuerySymbol}/><label className="mp-range"><span>기준 개수</span><input type="number" min="1" max="20" value={queryThreshold} onChange={(event) => setQueryThreshold(Number(event.target.value))}/><b>{queryThreshold}개 이상</b></label><button className="mp-primary" type="button" disabled={busy} onClick={() => void act("action", { action: { type: "query", symbol: querySymbol, threshold: queryThreshold } })}>확정하고 결과 보기</button></div> : null}
+      {crewChoice === "arrest" ? <div className="mp-arrest-form"><h3>스파이 체포 선언</h3><p className="mp-warning">스파이와 파괴 목표 구역을 둘 다 맞혀야 승무원이 이깁니다. 하나라도 틀리면 스파이가 즉시 이깁니다.</p><label><span>스파이라고 생각하는 사람</span><select value={validSuspectSeat} onChange={(event) => setSuspectSeat(Number(event.target.value))}>{aliveOthers.map((player) => <option value={player.seat} key={player.seat}>{player.name}</option>)}</select></label><label><span>파괴 목표라고 생각하는 구역</span><select value={accusedLocation} onChange={(event) => setAccusedLocation(Number(event.target.value))}>{LOCATIONS.map(([id, location]) => <option value={id} key={id}>{String(id).padStart(2, "0")} · {location}</option>)}</select></label><button className="mp-primary danger" type="button" disabled={busy} onClick={() => void act("arrest", { suspectSeat: validSuspectSeat, locationId: accusedLocation })}>체포 선언 확정</button></div> : null}
+      {!specialAvailable && (view.secret.roleId === "pilot" || view.secret.roleId === "scientist") ? <p className="mp-locked-turn">직업 능력은 자신의 2·4·6번째 라운드처럼 짝수 라운드에만 쓸 수 있습니다. 이번에는 기본 조사나 체포를 선택하세요.</p> : null}</div>);
+  }
+
+  if (view.room.status === ("legacy-action" as RoomStatus)) {
     if (view.me.eliminated) return frame(<div className="mp-center"><h2>게임에서 탈락했습니다.</h2><p>공유 조사 기록과 남은 플레이어의 임무를 관전할 수 있습니다.</p></div>);
     if (myPublic?.submitted) return frame(<div className="mp-center"><div className="mp-loader"/><h2>행동 확정 완료</h2><p>선택은 변경할 수 없습니다. 다른 플레이어를 기다리고 있습니다.</p><div className="mp-submit-track">{state.players.filter((player) => !player.eliminated).map((player) => <span className={player.submitted ? "done" : ""} key={player.seat}>{player.name} · {player.submitted ? "LOCKED" : "WAIT"}</span>)}</div></div>);
 
@@ -245,7 +289,7 @@ export default function MultiplayerApp({ onExit }: { onExit: () => void }) {
   }
 
   if (view.room.status === "resolving") return frame(<div className="mp-center"><div className="mp-loader"/><h2>4명의 행동 판정 중</h2><p>비밀 타깃과 행동 조건을 서버에서 대조하고 있습니다.</p></div>);
-  if (view.room.status === "resolution") return frame(<div className="mp-resolution"><p className="mp-kicker">PUBLIC SYSTEM RESOLUTION</p><h2>CYCLE {String(view.room.round).padStart(2, "0")} 분석 완료</h2>{state.spyExposed ? <div className="mp-alert">역추적 실패 · 스파이의 정체가 공개되었습니다.</div> : null}{state.report?.assassination ? <div className={`mp-shot ${state.report.assassination.success ? "success" : "failed"}`}><b>⌖ COUNTER-TRACE</b><h3>{state.report.assassination.success ? `${state.report.assassination.targetName} 탈락` : `실패 · 스파이는 ${state.report.assassination.spyName}`}</h3></div> : null}<div className="mp-resolution-grid"><article><small>LOCKDOWN</small><h3>{state.report?.isolation ? `${String(state.report.isolation).padStart(2, "0")} · ${locationName(state.report.isolation)}` : "기본 조사 선택"}</h3></article><article><small>FORENSICS</small><h3>{state.report?.inspection ? `${String(state.report.inspection).padStart(2, "0")} · ${locationName(state.report.inspection)}` : "기본 조사 선택"}</h3>{state.report?.inspection ? <><b>{state.report.detected ? "O" : "X"}</b><p>{state.report.detected ? `스파이 광물 총합 ${state.report.spyTotal}개` : "파괴 흔적 없음"}</p></> : null}</article><article><small>SABOTAGE</small><h3>CLASSIFIED</h3><strong>{state.destroyed}/5</strong></article></div>{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy} onClick={() => void act("investigate")}>기본 조사 단계 개시</button> : <p className="mp-wait">방장이 기본 조사 단계를 열 때까지 기다리십시오.</p>}</div>);
+  if (view.room.status === "resolution") return frame(<div className="mp-resolution"><p className="mp-kicker">라운드 결과</p><h2>라운드 {String(view.room.round).padStart(2, "0")} 판정 완료</h2>{state.spyExposed ? <div className="mp-alert">역추적 실패 · 스파이의 정체가 공개되었습니다.</div> : null}{state.report?.assassination ? <div className={`mp-shot ${state.report.assassination.success ? "success" : "failed"}`}><b>⌖ 역추적</b><h3>{state.report.assassination.success ? `${state.report.assassination.targetName} 탈락` : `실패 · 스파이는 ${state.report.assassination.spyName}`}</h3></div> : null}<div className="mp-resolution-grid"><article><small>구역 잠그기</small><h3>{state.report?.isolation ? `${String(state.report.isolation).padStart(2, "0")} · ${locationName(state.report.isolation)}` : "사용하지 않음"}</h3></article><article><small>현장 확인</small><h3>{state.report?.inspection ? `${String(state.report.inspection).padStart(2, "0")} · ${locationName(state.report.inspection)}` : "사용하지 않음"}</h3>{state.report?.inspection ? <><b>{state.report.detected ? "O" : "X"}</b><p>{state.report.detected ? `스파이 광물 총합 ${state.report.spyTotal}개` : "파괴 흔적 없음"}</p></> : null}</article><article><small>파괴 진행도</small><h3>공개되지 않음</h3><strong>{state.destroyed}/5</strong></article></div>{view.me.isHost ? <button className="mp-primary" type="button" disabled={busy} onClick={() => void act("next_round")}>다음 라운드 시작</button> : <p className="mp-wait">방장이 다음 라운드를 시작할 때까지 기다려 주세요.</p>}</div>);
 
   if (view.room.status === "investigation") {
     const myTurn = state.activeInvestigatorSeat === view.me.seat;
