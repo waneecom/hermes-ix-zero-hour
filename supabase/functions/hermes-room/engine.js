@@ -1,5 +1,5 @@
 export const SYMBOL_KEYS = ["eye", "key", "power", "bio", "quantum"];
-export const ITEM_TOTALS = { eye: 10, key: 10, power: 10, bio: 10, quantum: 10 };
+export const ITEM_TOTALS = { eye: 6, key: 6, power: 6, bio: 6, quantum: 6 };
 
 const emptySymbols = () => Object.fromEntries(SYMBOL_KEYS.map((symbol) => [symbol, 0]));
 
@@ -36,10 +36,10 @@ function symbolsFrom(items) {
 }
 
 export function createRandomizedDeck(random = Math.random) {
-  // 17 cards, 50 minerals: eight 4-mineral cards and nine 2-mineral cards.
+  // 17 cards, 30 minerals: thirteen 2-mineral cards and four 1-mineral cards.
   const cardSizes = shuffled([
-    ...Array.from({ length: 8 }, () => 4),
-    ...Array.from({ length: 9 }, () => 2),
+    ...Array.from({ length: 13 }, () => 2),
+    ...Array.from({ length: 4 }, () => 1),
   ], random);
   const itemPool = shuffled(SYMBOL_KEYS.flatMap((symbol) => (
     Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)

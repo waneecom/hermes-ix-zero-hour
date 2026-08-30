@@ -12,7 +12,7 @@ function seededRandom(seed) {
   };
 }
 
-test("randomizes 50 minerals across the complete 17-card deck", () => {
+test("randomizes 30 minerals across the complete 17-card deck", () => {
   const deck = createRandomizedDeck(seededRandom(20260830));
   const cards = [...deck.roles, ...deck.locations];
   const totals = cards.reduce((sum, card) => {
@@ -21,8 +21,8 @@ test("randomizes 50 minerals across the complete 17-card deck", () => {
   }, { eye: 0, key: 0, power: 0, bio: 0, quantum: 0 });
   assert.equal(cards.length, 17);
   assert.deepEqual(totals, ITEM_TOTALS);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 4).length, 8);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 9);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 13);
+  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 1).length, 4);
 });
 
 test("a new mission produces a different mineral layout and deal", () => {

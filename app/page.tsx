@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureAnonymousSession, isSupabaseConfigured, supabase } from "../src/supabase";
 import GameManual from "../src/GameManual";
 
-type SymbolKey = "eye" | "key" | "power";
+type SymbolKey = "eye" | "key" | "power" | "bio" | "quantum";
 type Symbols = Record<SymbolKey, number>;
 type Alignment = "crew" | "spy";
 type Screen = "landing" | "setup" | "briefing" | "action" | "resolution" | "investigation" | "privateResult" | "broadcastAnswer" | "broadcastResult" | "arrest" | "gameover";
 
-type Role = { id: "pilot" | "scientist" | "security" | "spy"; name: string; english: string; alignment: Alignment; symbols: Symbols; action: string; description: string; };
-type Location = { id: number; code: string; name: string; english: string; description: string; symbols: Symbols; };
+type Role = { id: "pilot" | "scientist" | "security" | "spy"; name: string; english: string; alignment: Alignment; symbols: Partial<Symbols>; action: string; description: string; };
+type Location = { id: number; code: string; name: string; english: string; description: string; symbols: Partial<Symbols>; };
 type Player = { name: string; role: Role; hand: Location[]; totals: Symbols; eliminated: boolean; };
 type Assassination = { targetIndex: number; totalGuess: number; locationGuess?: number; symbolGuess?: SymbolKey; };
 type RoundActions = { isolation?: number; inspection?: number; securityQuery?: { symbol: SymbolKey; threshold: number; answer: boolean }; spyIntent?: "attack" | "wait" | "assassinate"; assassination?: Assassination; };
@@ -24,7 +24,8 @@ type GameSnapshot = {
 };
 
 const SYMBOLS: Record<SymbolKey, { icon: string; name: string; color: string }> = {
-  eye: { icon: "◉", name: "센서 로그", color: "cyan" }, key: { icon: "◆", name: "보안 키코드", color: "lime" }, power: { icon: "ϟ", name: "전력 회로", color: "orange" },
+  eye: { icon: "◉", name: "센서 결정", color: "cyan" }, key: { icon: "◆", name: "보안 결정", color: "lime" }, power: { icon: "ϟ", name: "전력 결정", color: "orange" },
+  bio: { icon: "✦", name: "생체 결정", color: "magenta" }, quantum: { icon: "⬡", name: "양자 결정", color: "violet" },
 };
 
 const ROLES: Role[] = [
@@ -50,12 +51,12 @@ const LOCATIONS: Location[] = [
   { id: 13, code: "M-13", name: "암흑물질 차폐고", english: "DARK MATTER VAULT", description: "고밀도 특수 광물 격리 보관소", symbols: { eye: 1, key: 0, power: 0 } },
 ];
 
-const ZERO: Symbols = { eye: 0, key: 0, power: 0 };
-const ITEM_TOTALS: Symbols = { eye: 10, key: 10, power: 12 };
+const ZERO: Symbols = { eye: 0, key: 0, power: 0, bio: 0, quantum: 0 };
+const ITEM_TOTALS: Symbols = { eye: 6, key: 6, power: 6, bio: 6, quantum: 6 };
 const symbolKeys = Object.keys(SYMBOLS) as SymbolKey[];
 function shuffle<T>(items: T[]) { const result = [...items]; for (let i = result.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; } return result; }
-function addSymbols(...groups: Symbols[]) { return groups.reduce((sum, group) => ({ eye: sum.eye + group.eye, key: sum.key + group.key, power: sum.power + group.power }), { ...ZERO }); }
-function symbolTotal(group: Symbols) { return group.eye + group.key + group.power; }
+function addSymbols(...groups: Array<Partial<Symbols>>): Symbols { const sum = { ...ZERO }; for (const group of groups) for (const key of symbolKeys) sum[key] += Number(group[key] ?? 0); return sum; }
+function symbolTotal(group: Partial<Symbols>) { return symbolKeys.reduce((sum, key) => sum + Number(group[key] ?? 0), 0); }
 function getLocation(id?: number) { return LOCATIONS.find((location) => location.id === id)!; }
 const ART_ROOT = "/assets/hermes";
 function roleImage(roleId: Role["id"]) { return `${ART_ROOT}/role-${roleId}.jpg`; }
@@ -63,9 +64,8 @@ function locationImage(locationId: number) { return `${ART_ROOT}/location-${Stri
 
 function createRandomizedDeck() {
   const cardSizes = shuffle([
-    ...Array.from({ length: 3 }, () => 3),
-    ...Array.from({ length: 9 }, () => 2),
-    ...Array.from({ length: 5 }, () => 1),
+    ...Array.from({ length: 13 }, () => 2),
+    ...Array.from({ length: 4 }, () => 1),
   ]);
   const itemPool = shuffle(symbolKeys.flatMap((symbol) => Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)));
   let cursor = 0;
@@ -83,8 +83,8 @@ function createRandomizedDeck() {
   };
 }
 
-function SymbolRow({ symbols, compact = false }: { symbols: Symbols; compact?: boolean }) {
-  return <div className={`symbol-row ${compact ? "compact" : ""}`}>{symbolKeys.flatMap((key) => Array.from({ length: symbols[key] }, (_, index) => <span className={`symbol ${SYMBOLS[key].color}`} title={SYMBOLS[key].name} key={`${key}-${index}`}>{SYMBOLS[key].icon}</span>))}</div>;
+function SymbolRow({ symbols, compact = false }: { symbols: Partial<Symbols>; compact?: boolean }) {
+  return <div className={`symbol-row ${compact ? "compact" : ""}`}>{symbolKeys.flatMap((key) => Array.from({ length: Number(symbols[key] ?? 0) }, (_, index) => <span className={`symbol ${SYMBOLS[key].color}`} title={SYMBOLS[key].name} key={`${key}-${index}`}>{SYMBOLS[key].icon}</span>))}</div>;
 }
 
 function PrivacyGate({ name, label, onReveal }: { name: string; label: string; onReveal: () => void }) {
@@ -108,7 +108,7 @@ export function Manual({ onClose }: { onClose: () => void }) {
     <article><b>04</b><div><h3>스파이 역저격</h3><p>스파이는 일반 행동 대신 승무원을 저격할 수 있습니다. 조종사·과학자는 손패 총 심볼 수와 이번 행동 구역을, 보안 책임자는 총 심볼 수와 직전 기밀 조회 심볼을 모두 맞혀야 합니다. 실패하면 스파이 정체가 공개됩니다.</p></div></article>
     <article><b>05</b><div><h3>최종 체포</h3><p>생존 승무원은 스파이 플레이어와 중앙 타깃을 함께 지목합니다. 둘 다 맞으면 승무원 승리, 하나라도 틀리면 스파이가 즉시 승리합니다.</p></div></article>
     <article className="warning-article"><b>06</b><div><h3>제로 아워</h3><p>격리되지 않은 중앙 타깃에 파괴 공작이 5회 누적되거나 승무원 전원이 탈락하면 스파이가 승리합니다.</p></div></article>
-    <aside><strong>랜덤 카드 프로토콜</strong><p>새 임무마다 역할 배정·카드 순서·중앙 타깃과 카드별 아이템이 다시 생성됩니다. 전체 합계는 항상 ◉ 10개 · ◆ 10개 · ϟ 12개이며, 시작된 임무의 단서는 종료까지 고정됩니다.</p></aside>
+    <aside><strong>랜덤 카드 프로토콜</strong><p>새 임무마다 역할 배정·카드 순서·중앙 타깃과 카드별 광물이 다시 생성됩니다. 광물은 5종이며 각 6개, 전체 30개입니다. 시작된 임무의 단서는 종료까지 고정됩니다.</p></aside>
   </div> : <div className="manual-content archive-grid"><div className="archive-section"><p className="section-label">ROLE CLEARANCE · 04</p>{ROLES.map((role) => <article className={`archive-card ${role.alignment}`} key={role.id}><img src={roleImage(role.id)} alt={`${role.name} 인물 일러스트`} loading="lazy" /><span>{role.english}</span><h3>{role.name}</h3><p>{role.action} · {role.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div><div className="archive-section"><p className="section-label">SHIP SECTORS · 13</p>{LOCATIONS.map((location) => <article className="archive-card" key={location.id}><img src={locationImage(location.id)} alt={`${location.name} 구역 일러스트`} loading="lazy" /><span>{location.code} · {location.english}</span><h3>{location.name}</h3><p>{location.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div></div>}</section></div>;
 }
 
@@ -327,11 +327,13 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
   const assassinationVictim = players[assassinationTarget];
   const actionReady = currentPlayer?.role.id === "pilot" ? Boolean(selectedLocation && selectedLocation !== lastIsolation) : currentPlayer?.role.id === "scientist" ? Boolean(selectedLocation) : currentPlayer?.role.id === "spy" ? Boolean(spyIntent && (spyIntent !== "assassinate" || (assassinationVictim && !assassinationVictim.eliminated && assassinationVictim.role.alignment === "crew"))) : true;
   const savedGameDeletePanel = savedGames.length ? <div className="saved-delete-panel"><small>저장 경기 관리</small>{savedGames.map((game) => <div key={game.id}><span>{game.name}</span><button type="button" onClick={() => void deleteGame(game)}>삭제</button></div>)}</div> : null;
+  const hotseatSpyTarget = currentPlayer?.role.id === "spy" && target && !covered && (screen === "briefing" || screen === "action") ? <aside className="hotseat-spy-target"><small>스파이 전용 · 실제 파괴 구역</small><img src={locationImage(target.id)} alt="스파이 파괴 타깃"/><div><strong>{String(target.id).padStart(2, "0")}</strong><h3>{target.name}</h3><p>이 구역을 공격해 5스택을 완성하십시오. 다른 플레이어에게 보여주면 안 됩니다.</p></div></aside> : null;
 
   return <main className={`mission-shell screen-${screen}`}>
     <Topbar round={screen !== "landing" && screen !== "setup" && players.length ? round : undefined} active={screen !== "landing" && screen !== "setup"} onManual={() => setManualOpen(true)} onReset={() => resetGame()} />
     <div className={`cloud-status ${cloudReady ? "online" : ""}`}><span>●</span> SUPABASE · {saveStatus}</div>
     {screen === "landing" ? savedGameDeletePanel : null}
+    {hotseatSpyTarget}
 
     {screen === "landing" ? <><section className="hero-grid"><div className="hero-copy"><p className="kicker">4인용 비밀 추리 · 함선 생존 프로토콜</p><h2>파괴자는 이미<br /><em>승선했다.</em></h2><p className="lede">13개 구역, 17장의 기밀 카드, 단 하나의 파괴 타깃. 다섯 번째 공작이 끝나기 전에 스파이와 목표 구역을 찾아내십시오.</p><div className="hero-actions"><button className="primary-cta" type="button" aria-controls="episodes" onClick={() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" })}>게임을 시작하기 <span>↓</span></button><button className="secondary-cta" type="button" onClick={() => setManualOpen(true)}>룰 먼저 보기</button></div>{savedGames.length ? <div className="saved-missions"><small>SUPABASE · SAVED MISSIONS</small>{savedGames.map((game) => <button type="button" key={game.id} onClick={() => loadGame(game)}><span>{game.name}</span><b>CYCLE {String(game.current_round).padStart(2, "0")} · {new Date(game.updated_at).toLocaleDateString("ko-KR")}</b></button>)}</div> : null}</div><div className="command-panel" aria-label="게임 구성"><div className="panel-head"><span>MISSION CONTROL</span><b>ZERO HOUR</b></div><div className="threat-ring"><div><strong>5</strong><span>/ 5</span><small>폭발 임계치</small></div></div><div className="telemetry"><div><span>승무원</span><strong>03</strong></div><div><span>잠입자</span><strong className="danger">01</strong></div><div><span>기밀 카드</span><strong>17</strong></div></div><div className="classified">CENTRAL TARGET · CLASSIFIED</div></div></section><EpisodePrologue onOnline={onOnline} onHotseat={() => setScreen("setup")} /><footer className="signal-line"><span>● SYSTEM READY</span><div /><p>HERMES NETWORK / ENCRYPTED CHANNEL 9</p></footer></> : null}
 
