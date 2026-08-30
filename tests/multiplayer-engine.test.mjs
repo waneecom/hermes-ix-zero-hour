@@ -5,9 +5,22 @@ import { createDeal, createRandomizedDeck, ITEM_TOTALS, resolveRound, symbolTota
 
 const members = [0, 1, 2, 3].map((seat) => ({ room_id: "room", user_id: `u${seat}`, seat, name: `P${seat}`, eliminated: false }));
 
+test("landing rule preview opens the current online 4.3 manual", () => {
+  const landing = fs.readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const manual = fs.readFileSync(new URL("../src/GameManual.tsx", import.meta.url), "utf8");
+  assert.match(landing, /import GameManual from "\.\.\/src\/GameManual"/);
+  assert.match(landing, /manualOpen \? <GameManual/);
+  assert.match(manual, /ONLINE RULES 4\.3/);
+  assert.match(manual, /기관별 광물은 영구 고정입니다/);
+  assert.match(manual, /안전 기관 카드 3장/);
+});
+
 test("online rules immediately calculate truthful answers for every player", () => {
   const source = fs.readFileSync(new URL("../supabase/functions/hermes-room/index.ts", import.meta.url), "utf8");
-  assert.match(source, /rulesVersion: "4\.2"/);
+  assert.match(source, /rulesVersion: "4\.3"/);
+  assert.match(source, /locationCatalog: deal\.locationCatalog/);
+  assert.match(source, /locationGuesses\.length !== 3/);
+  assert.doesNotMatch(source, /totalGuess/);
   assert.match(source, /target_location_id,destroyed/);
   assert.match(source, /p_destroyed: resolution\.destroyed/);
   assert.match(source, /async function broadcastQuestionLog/);
@@ -23,7 +36,7 @@ function seededRandom(seed) {
   };
 }
 
-test("randomizes 30 minerals across the complete 17-card deck", () => {
+test("keeps the same balanced 30-mineral layout across every game", () => {
   const deck = createRandomizedDeck(seededRandom(20260830));
   const cards = [...deck.roles, ...deck.locations];
   const totals = cards.reduce((sum, card) => {
@@ -32,12 +45,16 @@ test("randomizes 30 minerals across the complete 17-card deck", () => {
   }, { eye: 0, key: 0, power: 0, bio: 0, quantum: 0 });
   assert.equal(cards.length, 17);
   assert.deepEqual(totals, ITEM_TOTALS);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 2).length, 13);
-  assert.equal(cards.filter((card) => symbolTotal(card.symbols) === 1).length, 4);
+  assert.ok(deck.locations.every((card) => symbolTotal(card.symbols) === 2));
+  assert.ok(deck.roles.every((card) => symbolTotal(card.symbols) === 1));
+  assert.deepEqual(createRandomizedDeck(seededRandom(1)), createRandomizedDeck(seededRandom(2)));
 });
 
-test("a new mission produces a different mineral layout and deal", () => {
-  assert.notDeepEqual(createDeal(members, seededRandom(1)), createDeal(members, seededRandom(2)));
+test("a new mission keeps card minerals fixed but produces a different deal", () => {
+  const first = createDeal(members, seededRandom(1));
+  const second = createDeal(members, seededRandom(2));
+  assert.deepEqual(first.locationCatalog, second.locationCatalog);
+  assert.notDeepEqual({ target: first.targetLocationId, assignments: first.assignments }, { target: second.targetLocationId, assignments: second.assignments });
 });
 
 test("deals one role and three safe locations to all four remote players", () => {
@@ -65,10 +82,10 @@ function gameState(overrides = {}) {
     },
     members,
     secrets: [
-      { user_id: "u0", role_id: "pilot", totals: { eye: 2, key: 1, power: 2, bio: 1, quantum: 1 } },
-      { user_id: "u1", role_id: "scientist", totals: { eye: 4, key: 2, power: 1, bio: 2, quantum: 1 } },
-      { user_id: "u2", role_id: "security", totals: { eye: 2, key: 3, power: 2, bio: 2, quantum: 2 } },
-      { user_id: "u3", role_id: "spy", totals: { eye: 3, key: 2, power: 4, bio: 1, quantum: 2 } },
+      { user_id: "u0", role_id: "pilot", hand: [{ id: 2 }, { id: 3 }, { id: 4 }], totals: { eye: 2, key: 1, power: 2, bio: 1, quantum: 1 } },
+      { user_id: "u1", role_id: "scientist", hand: [{ id: 5 }, { id: 6 }, { id: 7 }], totals: { eye: 4, key: 2, power: 1, bio: 2, quantum: 1 } },
+      { user_id: "u2", role_id: "security", hand: [{ id: 8 }, { id: 9 }, { id: 10 }], totals: { eye: 2, key: 3, power: 2, bio: 2, quantum: 2 } },
+      { user_id: "u3", role_id: "spy", hand: [{ id: 11 }, { id: 12 }, { id: 13 }], totals: { eye: 3, key: 2, power: 4, bio: 1, quantum: 2 } },
     ],
     targetLocationId: 1,
     previousDestroyed: 0,
@@ -121,7 +138,7 @@ test("a perfect counter-trace eliminates its target", () => {
     { user_id: "u0", action: { type: "isolate", locationId: 2 } },
     { user_id: "u1", action: { type: "inspect", locationId: 3 } },
     { user_id: "u2", action: { type: "query", symbol: "key", threshold: 2 } },
-    { user_id: "u3", action: { type: "assassinate", targetUserId: "u0", totalGuess: 7, locationGuess: 2 } },
+    { user_id: "u3", action: { type: "assassinate", targetUserId: "u0", locationGuesses: [4, 2, 3] } },
   ] });
   assert.equal(result.eliminatedUserId, "u0");
   assert.equal(result.publicState.report.assassination.success, true);
@@ -132,7 +149,7 @@ test("a failed counter-trace publicly exposes the spy", () => {
     { user_id: "u0", action: { type: "isolate", locationId: 2 } },
     { user_id: "u1", action: { type: "inspect", locationId: 3 } },
     { user_id: "u2", action: { type: "query", symbol: "key", threshold: 2 } },
-    { user_id: "u3", action: { type: "assassinate", targetUserId: "u0", totalGuess: 20, locationGuess: 2 } },
+    { user_id: "u3", action: { type: "assassinate", targetUserId: "u0", locationGuesses: [2, 3, 5] } },
   ] });
   assert.equal(result.eliminatedUserId, null);
   assert.equal(result.publicState.spyExposed, true);

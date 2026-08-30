@@ -158,8 +158,10 @@ async function startRoom(roomId: string, userId: string) {
   if (members.length !== 4) throw new ApiError("4명이 모두 입장해야 시작할 수 있습니다.");
   const deal = createDeal(members);
   const publicState = {
-    rulesVersion: "4.2",
+    rulesVersion: "4.3",
     mineralTotal: 30,
+    fixedCardLayout: true,
+    locationCatalog: deal.locationCatalog,
     players: members.map((entry) => ({ seat: entry.seat, name: entry.name, eliminated: false, submitted: false })),
     lastIsolation: null,
     spyExposed: false,
@@ -232,14 +234,16 @@ async function normalizeAction(roomId: string, room: JsonRecord, secret: JsonRec
   if (!target || target.eliminated) throw new ApiError("유효한 생존 승무원을 선택하십시오.");
   const { data: targetSecret, error } = await admin.from("hermes_ix_player_secrets").select("role_id").eq("room_id", roomId).eq("user_id", target.user_id).single();
   if (error || targetSecret.role_id === "spy") throw new ApiError("자신은 저격할 수 없습니다.");
-  const totalGuess = Number(action.totalGuess);
-  if (!Number.isInteger(totalGuess) || totalGuess < 2 || totalGuess > 20) throw new ApiError("광물 총합 추측값은 2~20개여야 합니다.");
+  const locationGuesses = Array.isArray(action.locationGuesses)
+    ? action.locationGuesses.map((locationId) => validLocation(locationId))
+    : [];
+  if (locationGuesses.length !== 3 || new Set(locationGuesses).size !== 3) {
+    throw new ApiError("역추적에는 서로 다른 기관 카드 3장을 골라야 합니다.");
+  }
   return {
     type: "assassinate",
     targetUserId: target.user_id,
-    totalGuess,
-    locationGuess: targetSecret.role_id === "pilot" || targetSecret.role_id === "scientist" ? validLocation(action.locationGuess) : null,
-    symbolGuess: targetSecret.role_id === "security" ? validSymbol(action.symbolGuess) : null,
+    locationGuesses,
   };
 }
 
@@ -470,7 +474,7 @@ async function broadcastQuestion(roomId: string, userId: string, body: JsonRecor
 }
 
 // Kept only so rooms created by older deployments can still be read safely.
-// Ruleset 4.2 does not route requests to these three legacy phase handlers.
+// Ruleset 4.3 does not route requests to these three legacy phase handlers.
 void openInvestigation;
 void privateQuestion;
 void broadcastQuestion;

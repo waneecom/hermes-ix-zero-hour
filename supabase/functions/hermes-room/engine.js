@@ -4,13 +4,27 @@ export const ITEM_TOTALS = { eye: 6, key: 6, power: 6, bio: 6, quantum: 6 };
 const emptySymbols = () => Object.fromEntries(SYMBOL_KEYS.map((symbol) => [symbol, 0]));
 
 export const ROLES = [
-  { id: "pilot", symbols: emptySymbols() },
-  { id: "scientist", symbols: emptySymbols() },
-  { id: "security", symbols: emptySymbols() },
-  { id: "spy", symbols: emptySymbols() },
+  { id: "pilot", symbols: { ...emptySymbols(), power: 1 } },
+  { id: "scientist", symbols: { ...emptySymbols(), bio: 1 } },
+  { id: "security", symbols: { ...emptySymbols(), key: 1 } },
+  { id: "spy", symbols: { ...emptySymbols(), quantum: 1 } },
 ];
 
-export const LOCATIONS = Array.from({ length: 13 }, (_, index) => ({ id: index + 1, symbols: emptySymbols() }));
+export const LOCATIONS = [
+  { id: 1, symbols: { ...emptySymbols(), power: 2 } },
+  { id: 2, symbols: { ...emptySymbols(), eye: 1, quantum: 1 } },
+  { id: 3, symbols: { ...emptySymbols(), power: 1, quantum: 1 } },
+  { id: 4, symbols: { ...emptySymbols(), bio: 2 } },
+  { id: 5, symbols: { ...emptySymbols(), eye: 1, quantum: 1 } },
+  { id: 6, symbols: { ...emptySymbols(), key: 1, quantum: 1 } },
+  { id: 7, symbols: { ...emptySymbols(), eye: 1, bio: 1 } },
+  { id: 8, symbols: { ...emptySymbols(), power: 1, bio: 1 } },
+  { id: 9, symbols: { ...emptySymbols(), key: 2 } },
+  { id: 10, symbols: { ...emptySymbols(), eye: 2 } },
+  { id: 11, symbols: { ...emptySymbols(), key: 1, power: 1 } },
+  { id: 12, symbols: { ...emptySymbols(), key: 1, bio: 1 } },
+  { id: 13, symbols: { ...emptySymbols(), eye: 1, quantum: 1 } },
+];
 
 function shuffled(items, random = Math.random) {
   const result = [...items];
@@ -28,34 +42,12 @@ function addSymbols(...groups) {
   }, emptySymbols());
 }
 
-function symbolsFrom(items) {
-  return items.reduce((symbols, item) => {
-    symbols[item] += 1;
-    return symbols;
-  }, emptySymbols());
-}
-
-export function createRandomizedDeck(random = Math.random) {
-  // 17 cards, 30 minerals: thirteen 2-mineral cards and four 1-mineral cards.
-  const cardSizes = shuffled([
-    ...Array.from({ length: 13 }, () => 2),
-    ...Array.from({ length: 4 }, () => 1),
-  ], random);
-  const itemPool = shuffled(SYMBOL_KEYS.flatMap((symbol) => (
-    Array.from({ length: ITEM_TOTALS[symbol] }, () => symbol)
-  )), random);
-  let cursor = 0;
-  let cardIndex = 0;
-  const nextSymbols = () => {
-    const size = cardSizes[cardIndex];
-    cardIndex += 1;
-    const symbols = symbolsFrom(itemPool.slice(cursor, cursor + size));
-    cursor += size;
-    return symbols;
-  };
+export function createRandomizedDeck() {
+  // Kept under the old export name for compatibility. Mineral layouts are fixed;
+  // only target selection, role assignment, and dealing are randomized.
   return {
-    roles: ROLES.map((role) => ({ ...role, symbols: nextSymbols() })),
-    locations: LOCATIONS.map((location) => ({ ...location, symbols: nextSymbols() })),
+    roles: ROLES.map((role) => ({ ...role, symbols: { ...role.symbols } })),
+    locations: LOCATIONS.map((location) => ({ ...location, symbols: { ...location.symbols } })),
   };
 }
 
@@ -65,9 +57,9 @@ export function symbolTotal(symbols = {}) {
 
 export function createDeal(members, random = Math.random) {
   if (members.length !== 4) throw new Error("FOUR_PLAYERS_REQUIRED");
-  const randomizedDeck = createRandomizedDeck(random);
-  const locations = shuffled(randomizedDeck.locations, random);
-  const roles = shuffled(randomizedDeck.roles, random);
+  const fixedDeck = createRandomizedDeck();
+  const locations = shuffled(fixedDeck.locations, random);
+  const roles = shuffled(fixedDeck.roles, random);
   const targetLocationId = locations[0].id;
   const assignments = [...members].sort((a, b) => a.seat - b.seat).map((member, seat) => {
     const hand = locations.slice(1 + seat * 3, 4 + seat * 3);
@@ -80,7 +72,7 @@ export function createDeal(members, random = Math.random) {
       totals: addSymbols(role.symbols, ...hand.map((location) => location.symbols)),
     };
   });
-  return { targetLocationId, assignments };
+  return { targetLocationId, assignments, locationCatalog: fixedDeck.locations };
 }
 
 export function resolveRound({ room, members, secrets, actions, targetLocationId, previousDestroyed = 0 }) {
@@ -129,13 +121,12 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   if (spyAction?.type === "assassinate") {
     const targetMember = members.find((member) => member.user_id === spyAction.targetUserId);
     const targetSecret = targetMember ? secretByUser.get(targetMember.user_id) : null;
-    const targetAction = targetMember ? actionByUser.get(targetMember.user_id) : null;
-    const totalCorrect = Boolean(targetSecret) && symbolTotal(targetSecret.totals) === spyAction.totalGuess;
-    let secondCorrect = false;
-    if (targetSecret?.role_id === "pilot") secondCorrect = targetAction?.type === "isolate" && targetAction.locationId === spyAction.locationGuess;
-    if (targetSecret?.role_id === "scientist") secondCorrect = targetAction?.type === "inspect" && targetAction.locationId === spyAction.locationGuess;
-    if (targetSecret?.role_id === "security") secondCorrect = targetAction?.type === "query" && targetAction.symbol === spyAction.symbolGuess;
-    const success = Boolean(targetMember && !targetMember.eliminated && targetSecret?.role_id !== "spy" && totalCorrect && secondCorrect);
+    const actualCards = (targetSecret?.hand ?? []).map((card) => Number(card.id)).sort((a, b) => a - b);
+    const guessedCards = (spyAction.locationGuesses ?? []).map(Number).sort((a, b) => a - b);
+    const cardsCorrect = actualCards.length === 3
+      && guessedCards.length === 3
+      && actualCards.every((cardId, index) => cardId === guessedCards[index]);
+    const success = Boolean(targetMember && !targetMember.eliminated && targetSecret?.role_id !== "spy" && cardsCorrect);
     assassination = { targetSeat: targetMember?.seat ?? null, targetName: targetMember?.name ?? "알 수 없음", success };
     if (success) {
       eliminatedUserId = targetMember.user_id;

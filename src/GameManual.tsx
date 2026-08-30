@@ -8,6 +8,14 @@ const minerals = [
   ["◈", "양자 광물", "연산·통신 계통"],
 ];
 
+const institutions = [
+  [1, "제1 메인 리액터실", "⚡ ⚡"], [2, "양자 연산 코어실", "👁️ ◈"], [3, "중력 제어 장치실", "⚡ ◈"],
+  [4, "생명유지 산소실", "🧬 🧬"], [5, "서브 통신 중계탑", "👁️ ◈"], [6, "함교 항법 콘솔실", "🔑 ◈"],
+  [7, "바이오 큐브 연구실", "👁️ 🧬"], [8, "비상 동력 배전반", "⚡ 🧬"], [9, "격벽 보안 통제실", "🔑 🔑"],
+  [10, "센서 레이더 돔", "👁️ 👁️"], [11, "보조 플라즈마 추진실", "🔑 ⚡"], [12, "선외 탈출 포드실", "🔑 🧬"],
+  [13, "암흑물질 차폐고", "👁️ ◈"],
+] as const;
+
 function RuleBlock({ title, children, tone = "normal" }: { title: string; children: ReactNode; tone?: "normal" | "warning" | "secret" }) {
   return <section className={`rule-block ${tone}`}><h3>{title}</h3>{children}</section>;
 }
@@ -31,8 +39,9 @@ export default function GameManual({ onClose }: { onClose: () => void }) {
       short: "준비", title: "카드·광물·게임 준비", subtitle: "웹사이트가 섞기와 배분을 자동으로 처리합니다.",
       body: <>
         <RuleBlock title="카드는 정확히 17장입니다"><p><b>역할 카드 4장</b>은 수석 조종사, 수석 과학자, 보안 책임자, 기계 관리사(스파이)입니다. <b>위치 카드 13장</b> 중 1장은 중앙 파괴 목표가 되고, 나머지 12장은 네 명에게 3장씩 나뉩니다. 따라서 한 사람은 역할 1장과 위치 3장, 모두 4장을 갖습니다.</p></RuleBlock>
-        <RuleBlock title="광물은 5종, 전체 30개입니다"><p>아래 다섯 종류가 각각 정확히 6개씩 있습니다. 30개는 역할 카드와 위치 카드를 합친 17장 전체에 무작위로 놓입니다.</p><div className="manual-minerals">{minerals.map(([icon, name, text]) => <span key={name}><b>{icon}</b><strong>{name}</strong><small>{text}</small></span>)}</div><p className="rule-note">중앙 목표 카드에도 광물이 들어 있습니다. 그 카드는 누구의 손에도 없으므로 네 사람의 손에 보이는 광물 합계는 게임마다 28개 또는 29개가 될 수 있습니다. 오류가 아닙니다.</p></RuleBlock>
-        <RuleBlock title="새 게임마다 모두 다시 섞입니다"><ul><li>누가 어떤 역할인지</li><li>각 사람이 받는 위치 카드 3장</li><li>중앙 파괴 목표 구역</li><li>17장에 놓이는 광물 종류와 개수</li><li>플레이어에게 보이는 카드 순서</li></ul><p>이전 게임의 답이나 배치를 다음 게임에 이용할 수 없습니다.</p></RuleBlock>
+        <RuleBlock title="광물은 5종, 전체 30개입니다"><p>다섯 종류가 각각 정확히 6개씩 있습니다. 기관 카드 13장은 각 2개, 역할 카드 4장은 각 1개를 가집니다.</p><div className="manual-minerals">{minerals.map(([icon, name, text]) => <span key={name}><b>{icon}</b><strong>{name}</strong><small>{text}</small></span>)}</div><p className="rule-note">중앙 목표 카드에는 광물 2개가 있지만 누구도 그 카드를 손에 들지 않습니다. 따라서 네 사람의 카드 4장씩을 합치면 항상 28개가 보입니다.</p></RuleBlock>
+        <RuleBlock title="기관별 광물은 영구 고정입니다" tone="secret"><p>아래 표는 모든 플레이어에게 공개됩니다. 파괴 목표도 이 13장 안에 있지만 어느 카드인지는 스파이만 압니다. 수십 번 게임해도 기관과 광물의 짝은 바뀌지 않습니다.</p><div className="manual-institution-grid">{institutions.map(([id, name, items]) => <span key={id}><b>{String(id).padStart(2, "0")}</b><strong>{name}</strong><small>{items}</small></span>)}</div></RuleBlock>
+        <RuleBlock title="바뀌는 것과 바뀌지 않는 것"><p><b>매 게임 무작위:</b> 역할을 받는 사람, 중앙 파괴 목표 1장, 각자 받는 안전 기관 카드 3장, 카드가 화면에 나오는 순서.</p><p><b>항상 고정:</b> 기관별 광물, 역할별 광물, 전체 광물 30개.</p><p className="rule-note"><b>고정 역할 광물:</b> 조종사 ⚡ 1개 · 과학자 🧬 1개 · 보안 책임자 🔑 1개 · 스파이 ◈ 1개</p></RuleBlock>
         <RuleBlock title="온라인 방 시작 방법"><ol><li>한 명이 이름을 입력하고 방을 만듭니다.</li><li>화면에 나온 6자리 방 코드를 다른 세 명에게 알려 줍니다.</li><li>세 명은 각자 다른 기기에서 이름과 코드를 입력해 참가합니다.</li><li>정확히 4명이 모이면 방장이 게임 시작을 누릅니다.</li><li>각자 자기 역할·카드·광물을 확인하고 다른 사람에게 화면을 보여 주지 않습니다.</li></ol></RuleBlock>
       </>,
     },
@@ -73,7 +82,7 @@ export default function GameManual({ onClose }: { onClose: () => void }) {
         <RuleBlock title="비밀 정보" tone="secret"><p>기계 관리사는 사실 처음부터 승무원으로 잠복한 휴머노이드 스파이입니다. 게임이 시작되면 왼쪽 비밀 카드에 <b>파괴 목표 구역</b>과 <b>성공한 파괴 횟수 / 5</b>가 표시됩니다. 이 두 정보는 공개 방 데이터에서도 제외되어 승무원은 볼 수 없습니다.</p></RuleBlock>
         <RuleBlock title="1. 파괴 공격"><p>비밀 목표를 공격합니다. 같은 라운드 조종사의 잠금이 목표에 걸려 있으면 실패하고, 아니면 성공 횟수가 1 늘어납니다. 누적 5번 성공하면 즉시 스파이가 승리합니다. 성공 횟수는 게임이 끝나도 스파이 화면에만 숫자로 표시됩니다.</p></RuleBlock>
         <RuleBlock title="2. 조용히 있기"><p>이번 라운드에는 공격하지 않습니다. 파괴 횟수는 늘지 않지만 과학자의 현장 확인을 X로 만들 수 있습니다. 승무원이 목표를 알아낸 것 같을 때 공격 시점을 숨기는 데 사용합니다.</p></RuleBlock>
-        <RuleBlock title="3. 역추적"><p>일반 행동 대신 승무원 한 명을 노립니다. 아래 두 답을 모두 맞히면 그 승무원이 즉시 탈락합니다. 하나라도 틀리면 공격은 실패하고 스파이의 이름과 좌석이 모두에게 공개됩니다.</p><ul><li><b>조종사·과학자 대상:</b> 그 사람 카드 4장의 광물 전체 합계 + 이번 라운드 직업 능력으로 고른 구역.</li><li><b>보안 책임자 대상:</b> 카드 4장의 광물 전체 합계 + 이번 라운드 보안 비밀 조회에서 고른 광물.</li><li>대상이 이번 라운드에 기본 조사처럼 해당 직업 행동을 쓰지 않았다면 두 번째 조건을 맞힐 수 없어 역추적은 실패합니다.</li></ul></RuleBlock>
+        <RuleBlock title="3. 역추적"><p>일반 행동 대신 <b>살아 있는 승무원 한 명</b>을 고르고, 그 사람이 손에 든 <b>안전 기관 카드 3장</b>을 모두 추측합니다.</p><ul><li>대상 플레이어와 기관 카드 세 장이 전부 맞으면 그 승무원은 즉시 탈락합니다.</li><li>카드를 고른 순서는 상관없지만 세 장 중 하나라도 틀리면 실패합니다.</li><li>실패하면 스파이의 이름과 좌석이 모두에게 공개됩니다.</li><li>광물 총합, 역할, 이번 라운드 직업 행동은 더 이상 맞히지 않습니다.</li></ul></RuleBlock>
         <p className="manual-tip">역추적에 성공해 모든 살아 있는 승무원이 사라지면 스파이가 승리합니다. 실패해 정체가 공개되어도 게임은 계속되므로 승무원은 목표 구역까지 맞혀 체포해야 합니다.</p>
       </>,
     },
@@ -104,12 +113,13 @@ export default function GameManual({ onClose }: { onClose: () => void }) {
     {
       short: "체크·FAQ", title: "첫 게임 체크리스트와 자주 묻는 질문", subtitle: "시작 직전에 이 페이지만 함께 확인해도 됩니다.",
       body: <>
-        <RuleBlock title="시작 전 8가지"><ol><li>정확히 4명이 각자 다른 기기로 같은 방에 들어왔나요?</li><li>다른 사람에게 역할과 카드를 보여 주지 않았나요?</li><li>광물은 5종이고 전체 카드에 30개라는 것을 알았나요?</li><li>자기 차례는 2분이며 행동 하나만 고른다는 것을 알았나요?</li><li>기본 조사 결과는 즉시 공개되고 누구도 거짓말할 수 없다는 것을 알았나요?</li><li>보안 비밀 조회 결과는 보안 책임자에게만 보인다는 것을 알았나요?</li><li>목표와 파괴 횟수는 스파이에게만 보인다는 것을 알았나요?</li><li>체포는 사람과 구역을 둘 다 맞혀야 한다는 것을 알았나요?</li></ol></RuleBlock>
+        <RuleBlock title="시작 전 9가지"><ol><li>정확히 4명이 각자 다른 기기로 같은 방에 들어왔나요?</li><li>공개 기관 도감 13장과 고정 광물을 확인했나요?</li><li>다른 사람에게 역할과 자기 카드 3장을 보여 주지 않았나요?</li><li>광물은 5종이고 전체 카드에 30개라는 것을 알았나요?</li><li>자기 차례는 2분이며 행동 하나만 고른다는 것을 알았나요?</li><li>기본 조사 결과는 즉시 공개되고 누구도 거짓말할 수 없다는 것을 알았나요?</li><li>보안 비밀 조회 결과는 보안 책임자에게만 보인다는 것을 알았나요?</li><li>목표와 파괴 횟수는 스파이에게만 보인다는 것을 알았나요?</li><li>체포는 사람과 구역을 둘 다 맞혀야 한다는 것을 알았나요?</li></ol></RuleBlock>
         <RuleBlock title="O와 X는 무슨 뜻인가요?"><p>광물 질문에서 O는 선택한 광물을 기준 개수 이상 갖고 있다는 뜻이고 X는 그보다 적다는 뜻입니다. 과학자 화면의 O는 스파이가 이번 라운드에 과학자가 고른 진짜 목표를 공격했다는 뜻입니다.</p></RuleBlock>
         <RuleBlock title="스파이가 기본 조사에서 거짓말할 수 있나요?"><p>아니요. 한 명 조사와 모두 조사 모두 서버가 실제 카드로 계산합니다. 스파이도 항상 진짜 O/X가 나옵니다.</p></RuleBlock>
         <RuleBlock title="파괴 횟수가 왜 안 보이나요?"><p>정상입니다. 숫자는 스파이의 비밀 정보입니다. 승무원은 공격이 몇 번 성공했는지 모르는 긴장 속에서 조사와 체포 시점을 판단해야 합니다.</p></RuleBlock>
         <RuleBlock title="접속이 잠깐 끊기면 어떻게 하나요?"><p>같은 브라우저로 다시 접속하면 저장된 방 정보를 이용해 돌아올 수 있습니다. 화면이 멈춘 것 같으면 새로고침하세요. 2분 제한은 서버 시간 기준이라 접속이 끊긴 동안에도 계속 흐릅니다.</p></RuleBlock>
-        <RuleBlock title="이전 규칙 방이라는 안내가 나와요"><p>규칙 4.2 이전에 만든 방입니다. 비밀 데이터 구조가 다르므로 그 방에서 나간 뒤 새 방을 만들어야 합니다.</p></RuleBlock>
+        <RuleBlock title="현재 밸런스는 어떤가요?"><p>고정 기관 도감 덕분에 승무원은 목표를 논리적으로 좁히기 쉬워졌지만, 스파이도 공개 조사 결과로 상대의 카드 조합을 추리해 역추적할 수 있습니다. 역추적은 세 장을 모두 맞혀야 해 초반에는 어렵고 후반에 강해지는 보조 수단입니다. 현재 예상은 <b>승무원 약간 우세</b>이며, 먼저 10경기 정도 기록한 뒤 스파이 승률이 35% 아래면 파괴 승리 기준을 5회에서 4회로 낮추는 조정이 좋습니다.</p></RuleBlock>
+        <RuleBlock title="이전 규칙 방이라는 안내가 나와요"><p>규칙 4.3 이전에 만든 방입니다. 카드 구성과 역추적 판정이 다르므로 그 방에서 나간 뒤 새 방을 만들어야 합니다.</p></RuleBlock>
       </>,
     },
   ];
@@ -119,7 +129,7 @@ export default function GameManual({ onClose }: { onClose: () => void }) {
 
   return <div className="manual-backdrop" role="dialog" aria-modal="true" aria-label="온라인 게임 규칙 설명">
     <section className="manual-panel updated-manual paged-manual">
-      <header><div><p className="eyebrow">ONLINE RULES 4.2 · PAGE {String(page + 1).padStart(2, "0")}/{String(pages.length).padStart(2, "0")}</p><h2>{current.title}</h2><p>{current.subtitle}</p></div><button type="button" onClick={onClose} aria-label="닫기">×</button></header>
+      <header><div><p className="eyebrow">ONLINE RULES 4.3 · PAGE {String(page + 1).padStart(2, "0")}/{String(pages.length).padStart(2, "0")}</p><h2>{current.title}</h2><p>{current.subtitle}</p></div><button type="button" onClick={onClose} aria-label="닫기">×</button></header>
       <nav className="manual-page-tabs" aria-label="룰북 페이지">{pages.map((item, index) => <button type="button" className={index === page ? "active" : ""} onClick={() => go(index)} aria-current={index === page ? "page" : undefined} key={item.short}><b>{String(index + 1).padStart(2, "0")}</b><span>{item.short}</span></button>)}</nav>
       <div className="manual-content manual-book-page">{current.body}</div>
       <footer className="manual-page-footer"><button type="button" disabled={page === 0} onClick={() => go(page - 1)}>← 이전</button><span><b>{page + 1}</b> / {pages.length}</span>{page === pages.length - 1 ? <button type="button" className="complete" onClick={onClose}>읽기 완료</button> : <button type="button" onClick={() => go(page + 1)}>다음 →</button>}</footer>

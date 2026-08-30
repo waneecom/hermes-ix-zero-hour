@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureAnonymousSession, isSupabaseConfigured, supabase } from "../src/supabase";
+import GameManual from "../src/GameManual";
 
 type SymbolKey = "eye" | "key" | "power";
 type Symbols = Record<SymbolKey, number>;
@@ -359,6 +360,6 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
 
     {screen === "gameover" && result && target ? <section className={`gameover-view ${result.winner}`}><p className="kicker">MISSION TERMINATED · FINAL DISCLOSURE</p><h2>{result.winner === "crew" ? "스파이 체포." : "HERMES-IX LOST."}</h2><p className="gameover-reason">{result.reason}</p><div className="final-reveal"><article><small>OMEGA OPERATIVE</small><span>{String(players.indexOf(spyPlayer!)+1).padStart(2,"0")}</span><h3>{spyPlayer!.name}</h3><p>{spyPlayer!.role.name}</p></article><article><small>CENTRAL TARGET</small><span>{String(target.id).padStart(2,"0")}</span><h3>{target.name}</h3><p>{target.english}</p><SymbolRow symbols={target.symbols} /></article><article><small>SABOTAGE STACK</small><span>{destroyed}</span><h3>/ 5</h3><p>최종 누적 공작</p></article></div><div className="all-hands">{players.map((player, index) => <div className={player.eliminated ? "eliminated" : ""} key={index}><b>{player.name}{player.eliminated ? " · OUT" : ""}</b><span className={player.role.alignment}>{player.role.name}</span><p>{player.hand.map((card) => `${String(card.id).padStart(2,"0")} ${card.name}`).join(" · ")}</p></div>)}</div><button className="primary-cta" type="button" onClick={() => resetGame(true)}>새로운 임무 시작 <span>↗</span></button></section> : null}
 
-    {manualOpen ? <Manual onClose={() => setManualOpen(false)} /> : null}
+    {manualOpen ? <GameManual onClose={() => setManualOpen(false)} /> : null}
   </main>;
 }
