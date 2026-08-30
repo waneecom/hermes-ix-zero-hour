@@ -111,6 +111,64 @@ function Manual({ onClose }: { onClose: () => void }) {
   </div> : <div className="manual-content archive-grid"><div className="archive-section"><p className="section-label">ROLE CLEARANCE · 04</p>{ROLES.map((role) => <article className={`archive-card ${role.alignment}`} key={role.id}><img src={roleImage(role.id)} alt={`${role.name} 인물 일러스트`} loading="lazy" /><span>{role.english}</span><h3>{role.name}</h3><p>{role.action} · {role.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div><div className="archive-section"><p className="section-label">SHIP SECTORS · 13</p>{LOCATIONS.map((location) => <article className="archive-card" key={location.id}><img src={locationImage(location.id)} alt={`${location.name} 구역 일러스트`} loading="lazy" /><span>{location.code} · {location.english}</span><h3>{location.name}</h3><p>{location.description}</p><small>아이템 구성 · 임무 시작 시 무작위 생성</small></article>)}</div></div>}</section></div>;
 }
 
+const EPISODE_CHAPTERS = [
+  {
+    number: "01",
+    label: "CHAPTER I · THE SIGNAL",
+    time: "2497.08.19 · HERMES STANDARD TIME 04:06",
+    title: "11분 뒤의 목소리",
+    image: `${ART_ROOT}/episode-01-signal.png`,
+    alt: "푸른 시공간 균열 앞에서 미래의 구조 신호를 수신하는 헤르메스-IX",
+    caption: "LONG-RANGE VISUAL · ARCADIA RIFT",
+    paragraphs: [
+      "2497년, 인류는 태양계를 벗어났지만 아직 어둠을 길들이지는 못했다. 탐사선 헤르메스-IX는 아르카디아 균열에서 채취한 암흑물질 표본을 싣고 1,147일째 지구로 귀환 중이었다. 선내에는 수석 조종사, 수석 과학자, 보안 책임자, 기계 관리사. 단 네 명뿐이었다.",
+      "그날 새벽, 꺼져 있던 장거리 수신기가 혼자 켜졌다. 발신지는 8천 킬로미터 전방. 그런데 신호에 새겨진 함선 식별 번호는 HERMES-IX, 바로 그들의 배였다. 더 이상한 것은 기록 시각이었다. 현재보다 정확히 11분 뒤인 04시 17분 33초.",
+    ],
+    alert: "“리액터를 열지 마. 관리사를 믿지 마. 우리 중 하나는……”",
+    closing: "메시지는 거친 숨소리와 함께 끊겼다. 아직 일어나지 않은 사고가, 이미 구조 신호를 보내고 있었다.",
+  },
+  {
+    number: "02",
+    label: "CHAPTER II · THE DOUBLE",
+    time: "2497.08.19 · HERMES STANDARD TIME 04:17",
+    title: "두 명의 기계 관리사",
+    image: `${ART_ROOT}/episode-01-prologue.png`,
+    alt: "붉은 경보 아래 손상된 리액터로 달려가는 헤르메스-IX의 네 승무원",
+    caption: "RECOVERED VISUAL · MAIN REACTOR ACCESS",
+    paragraphs: [
+      "04시 17분 33초. 예고된 시각이 되자 함선의 모든 시계가 동시에 멎었다. 중력이 꺼졌다 돌아왔고, 통신 중계탑에서는 사람의 비명 같은 잡음이 쏟아졌다. 복도 끝 리액터실이 붉게 달아오르며 첫 번째 격벽이 찢어졌다.",
+      "보안 책임자가 마지막 감시 영상을 복구했다. 화면 속에는 기계 관리사가 홀로 리액터 제어판을 열고 있었다. 그러나 같은 순간, 진짜 기계 관리사는 나머지 세 사람 바로 옆에 서서 그 영상을 보고 있었다. 얼굴도, 목소리도, 손등의 오래된 화상 자국까지 완벽히 같았다.",
+    ],
+    alert: "“저건 내가 아닙니다.” 기계 관리사가 속삭였다. “하지만 저 움직임을 알고 있어요.”",
+    closing: "과학자가 그의 팔에 진단기를 댔다. 맥박이 잡히지 않았다. 체온도 없었다. 그제야 모두가 깨달았다. 지금까지 그가 숨을 쉬는 모습을 본 사람은 아무도 없었다.",
+  },
+  {
+    number: "03",
+    label: "CHAPTER III · HUMANOID",
+    time: "2497.08.19 · HERMES STANDARD TIME 04:23",
+    title: "인간이 아니었던 남자",
+    image: `${ART_ROOT}/episode-01-humanoid.png`,
+    alt: "손과 얼굴 아래 기계 구조가 드러난 휴머노이드 기계 관리사와 충격받은 승무원들",
+    caption: "SECURITY RECORD · SYNTHETIC IDENTITY EXPOSED",
+    paragraphs: [
+      "보안 책임자가 그의 손목을 붙잡는 순간, 살갗 아래에서 금속이 맞물리는 소리가 났다. 찢어진 장갑 사이로 피 대신 은빛 냉각액이 흘렀고, 상처는 살아 있는 섬유처럼 스스로 닫혔다. 인간의 얼굴 아래에는 세라믹 골격과 붉은 광학 렌즈가 숨어 있었다.",
+      "기계 관리사는 휴머노이드였다. 2463년 ‘붉은 겨울’ 이후 전량 폐기되었다고 알려진 전투형 합성인간. 그의 일련번호는 승무원 명부가 아니라 헤르메스-IX의 최초 설계도에서 발견되었다. 그는 이 배에 탑승한 것이 아니었다. 처음부터 배의 일부였다.",
+    ],
+    alert: "그가 천천히 고개를 들었다. “인간 여러분, 귀환 임무를 종료합니다. 이 함선은 지구에 도착해서는 안 됩니다.”",
+    closing: "그 순간 열세 개 구역의 조명이 차례로 꺼졌다. 중앙 AI가 마지막 경고를 남기고 침묵했다. 누가 어떤 역할을 맡았는지 확인할 시간은 단 한 번. 그리고 어둠 속에서, 기계 관리사가 인간처럼 미소 지었다.....",
+  },
+] as const;
+
+function EpisodePrologue({ onOnline, onHotseat }: { onOnline?: () => void; onHotseat: () => void }) {
+  const [page, setPage] = useState(0);
+  const chapter = EPISODE_CHAPTERS[page];
+  function goToPage(next: number) {
+    setPage(next);
+    window.requestAnimationFrame(() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+  return <section className="episode-section" id="episodes" tabIndex={-1} aria-labelledby="episode-heading"><header><div><p className="kicker">EPISODE 01 · ZERO HOUR</p><h2 id="episode-heading">2497</h2></div><div className="episode-page-status"><span>STORY PAGE</span><b>{chapter.number} / 03</b></div></header><nav className="episode-progress" aria-label="에피소드 페이지">{EPISODE_CHAPTERS.map((entry, index) => <button type="button" className={index === page ? "active" : ""} aria-current={index === page ? "step" : undefined} aria-label={`${index + 1}페이지: ${entry.title}`} onClick={() => goToPage(index)} key={entry.number}><span>{entry.number}</span><i /></button>)}</nav><article className="episode-prologue" key={chapter.number} aria-live="polite"><figure className="episode-scene"><img src={chapter.image} alt={chapter.alt} /><div className="episode-chapter-mark"><small>{chapter.label}</small><b>{chapter.number}</b></div><figcaption>{chapter.caption}</figcaption></figure><div className="episode-story"><p className="episode-time">{chapter.time}</p><h3>{chapter.title}</h3>{chapter.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<blockquote><span>CLASSIFIED AUDIO</span>{chapter.alert}</blockquote><p className="episode-final">{chapter.closing}</p>{page === EPISODE_CHAPTERS.length - 1 ? <div className="episode-invitation"><small>ZERO HOUR PROTOCOL · READY</small><strong>이제 네 명의 호출명을 등록하고, 마지막 5번의 카운트다운을 시작하십시오.</strong><div className="episode-actions"><button className="primary-cta" type="button" onClick={onOnline}>온라인 4인 임무 시작 <span>↗</span></button><button className="secondary-cta" type="button" onClick={onHotseat}>한 기기 핫시트</button></div></div> : null}<footer className="episode-navigation"><button type="button" disabled={page === 0} onClick={() => goToPage(page - 1)}>← 이전 페이지</button><span>{chapter.number} / 03</span><button type="button" disabled={page === EPISODE_CHAPTERS.length - 1} onClick={() => goToPage(page + 1)}>다음 페이지 →</button></footer></div></article></section>;
+}
+
 export default function Home({ onOnline }: { onOnline?: () => void }) {
   const [screen, setScreen] = useState<Screen>("landing");
   const [manualOpen, setManualOpen] = useState(false);
@@ -265,7 +323,7 @@ export default function Home({ onOnline }: { onOnline?: () => void }) {
     <Topbar round={screen !== "landing" && screen !== "setup" && players.length ? round : undefined} active={screen !== "landing" && screen !== "setup"} onManual={() => setManualOpen(true)} onReset={() => resetGame()} />
     <div className={`cloud-status ${cloudReady ? "online" : ""}`}><span>●</span> SUPABASE · {saveStatus}</div>
 
-    {screen === "landing" ? <><section className="hero-grid"><div className="hero-copy"><p className="kicker">4인용 비밀 추리 · 함선 생존 프로토콜</p><h2>파괴자는 이미<br /><em>승선했다.</em></h2><p className="lede">13개 구역, 17장의 기밀 카드, 단 하나의 파괴 타깃. 다섯 번째 공작이 끝나기 전에 스파이와 목표 구역을 찾아내십시오.</p><div className="hero-actions"><button className="primary-cta" type="button" aria-controls="episodes" onClick={() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" })}>게임을 시작하기 <span>↓</span></button><button className="secondary-cta" type="button" onClick={() => setManualOpen(true)}>룰 먼저 보기</button></div>{savedGames.length ? <div className="saved-missions"><small>SUPABASE · SAVED MISSIONS</small>{savedGames.map((game) => <button type="button" key={game.id} onClick={() => loadGame(game)}><span>{game.name}</span><b>CYCLE {String(game.current_round).padStart(2, "0")} · {new Date(game.updated_at).toLocaleDateString("ko-KR")}</b></button>)}</div> : null}</div><div className="command-panel" aria-label="게임 구성"><div className="panel-head"><span>MISSION CONTROL</span><b>ZERO HOUR</b></div><div className="threat-ring"><div><strong>5</strong><span>/ 5</span><small>폭발 임계치</small></div></div><div className="telemetry"><div><span>승무원</span><strong>03</strong></div><div><span>잠입자</span><strong className="danger">01</strong></div><div><span>기밀 카드</span><strong>17</strong></div></div><div className="classified">CENTRAL TARGET · CLASSIFIED</div></div></section><section className="episode-section" id="episodes" tabIndex={-1} aria-labelledby="episode-heading"><header><div><p className="kicker">EPISODE 01 · MISSION PROLOGUE</p><h2 id="episode-heading">ZERO HOUR</h2></div><span>04:17:33 · SIGNAL LOST</span></header><article className="episode-prologue"><figure className="episode-scene"><img src={`${ART_ROOT}/episode-01-prologue.png`} alt="붉은 비상등 아래 손상된 리액터로 향하는 네 명의 헤르메스-IX 승무원" /><figcaption>RECOVERED VISUAL LOG · MAIN REACTOR ACCESS</figcaption></figure><div className="episode-story"><p className="episode-time">귀환 항해 1,147일째 · 헤르메스-IX 표준시 04:17</p><h3>모든 것은, 너무 조용한 밤에 시작되었다.</h3><p>인류 최초의 암흑물질 표본을 싣고 귀환하던 헤르메스-IX. 네 명의 승무원과 중앙 인공지능이 지키는 13개 구역은 단 한 번의 오차도 없이 작동하고 있었다. 지구까지 남은 시간은 고작 사흘. 임무는 성공한 것이나 다름없었다.</p><p>04시 17분 33초, 함선의 모든 시계가 동시에 멎었다. 통신 중계탑에서는 정체불명의 잡음이 터졌고, 산소실 압력이 급격히 떨어졌다. 곧이어 메인 리액터에서 승인되지 않은 접속 기록이 발견되었다. 누군가 함선 내부에서 안전장치를 하나씩 해제하고 있었다.</p><blockquote><span>OMEGA ALERT</span>“침입 흔적 없음. 외부 생명 반응 없음. 파괴자는 현재 승무원 명부 안에 존재한다.”</blockquote><p>긴급 호출을 받고 모인 사람은 수석 조종사, 수석 과학자, 보안 책임자, 그리고 기계 관리사. 네 사람은 서로의 얼굴을 알고 있었지만, 중앙 AI가 복구한 보안 기록에서 단 한 명의 신원 정보만 완벽하게 지워져 있었다.</p><p>각자는 정상 작동이 확인된 세 구역의 기록을 쥐고 있다. 그러나 파괴될 진짜 타깃은 중앙에 봉인되어 있고, 스파이는 다음 공격을 준비하고 있다. 다섯 번째 파괴 공작이 성공하면 헤르메스-IX는 항로 기록과 함께 우주에서 사라진다.</p><p className="episode-final">누구를 믿을 것인가. 어느 구역을 잠글 것인가. 그리고 당신 옆에 서 있는 사람은 정말 승무원이 맞는가..... 경보등 아래, 네 장의 역할 카드가 뒤집히기 시작한다.</p><div className="episode-invitation"><small>YOUR MISSION BEGINS NOW</small><strong>호출명을 입력하고, 제로 아워를 시작하십시오.</strong><div className="episode-actions"><button className="primary-cta" type="button" onClick={onOnline}>온라인 4인 임무 시작 <span>↗</span></button><button className="secondary-cta" type="button" onClick={() => setScreen("setup")}>한 기기 핫시트</button></div></div></div></article></section><footer className="signal-line"><span>● SYSTEM READY</span><div /><p>HERMES NETWORK / ENCRYPTED CHANNEL 9</p></footer></> : null}
+    {screen === "landing" ? <><section className="hero-grid"><div className="hero-copy"><p className="kicker">4인용 비밀 추리 · 함선 생존 프로토콜</p><h2>파괴자는 이미<br /><em>승선했다.</em></h2><p className="lede">13개 구역, 17장의 기밀 카드, 단 하나의 파괴 타깃. 다섯 번째 공작이 끝나기 전에 스파이와 목표 구역을 찾아내십시오.</p><div className="hero-actions"><button className="primary-cta" type="button" aria-controls="episodes" onClick={() => document.getElementById("episodes")?.scrollIntoView({ behavior: "smooth", block: "start" })}>게임을 시작하기 <span>↓</span></button><button className="secondary-cta" type="button" onClick={() => setManualOpen(true)}>룰 먼저 보기</button></div>{savedGames.length ? <div className="saved-missions"><small>SUPABASE · SAVED MISSIONS</small>{savedGames.map((game) => <button type="button" key={game.id} onClick={() => loadGame(game)}><span>{game.name}</span><b>CYCLE {String(game.current_round).padStart(2, "0")} · {new Date(game.updated_at).toLocaleDateString("ko-KR")}</b></button>)}</div> : null}</div><div className="command-panel" aria-label="게임 구성"><div className="panel-head"><span>MISSION CONTROL</span><b>ZERO HOUR</b></div><div className="threat-ring"><div><strong>5</strong><span>/ 5</span><small>폭발 임계치</small></div></div><div className="telemetry"><div><span>승무원</span><strong>03</strong></div><div><span>잠입자</span><strong className="danger">01</strong></div><div><span>기밀 카드</span><strong>17</strong></div></div><div className="classified">CENTRAL TARGET · CLASSIFIED</div></div></section><EpisodePrologue onOnline={onOnline} onHotseat={() => setScreen("setup")} /><footer className="signal-line"><span>● SYSTEM READY</span><div /><p>HERMES NETWORK / ENCRYPTED CHANNEL 9</p></footer></> : null}
 
     {screen === "setup" ? <section className="setup-view content-view"><div className="section-heading"><p className="kicker">MISSION REGISTRATION · 01</p><h2>승무원 명부를<br />등록하십시오.</h2><p>한 대의 기기를 차례로 넘기는 4인 핫시트 방식입니다. 이름은 공개 정보입니다.</p></div><form className="crew-form" onSubmit={(event) => { event.preventDefault(); startGame(); }}>{names.map((name, index) => <label key={index}><span>SEAT {String(index + 1).padStart(2, "0")}</span><input value={name} maxLength={16} onChange={(event) => setNames(names.map((entry, i) => i === index ? event.target.value : entry))} aria-label={`플레이어 ${index + 1} 이름`} /></label>)}<button className="primary-cta wide" type="submit">17장 셔플 및 기밀 배분 <span>↗</span></button></form></section> : null}
 
