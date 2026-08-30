@@ -26,3 +26,8 @@
 
 /* Make the four-card mineral total visibly auditable. */
 .mp-total-breakdown{display:block;margin-top:7px;color:#93a0a8!important;font-size:8px!important;line-height:1.55;letter-spacing:0!important}.mp-role-hand{border-color:#576438!important;background:#12180f}.mp-role-hand>span{color:#d7edaa!important;font-weight:800}
+
+/* Persistent in-game identity and objective panel. */
+.mp-role-footer{position:relative;z-index:3;display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:12px;width:min(1280px,calc(100% - 28px));box-sizing:border-box;margin:0 auto 28px;padding:13px 16px;border:1px solid #46563b;background:#10170e;box-shadow:0 14px 45px #0008}.mp-role-footer small{color:#849276;font-size:7px;letter-spacing:.15em}.mp-role-footer b{color:#c7ff35;font-size:14px}.mp-role-footer span{color:#c0c9b9;font-size:9px}.mp-role-footer em{color:#829078;font-size:8px;font-style:normal;text-align:right}.mp-role-footer.spy{border-color:#68392f;background:#1a0e0c}.mp-role-footer.spy b{color:#ff7058}.mp-role-footer.spy small,.mp-role-footer.spy em{color:#b7796d}
+@media(max-width:800px){.mp-role-footer{grid-template-columns:1fr auto;gap:6px 10px}.mp-role-footer span,.mp-role-footer em{grid-column:1/-1;text-align:left}}
+.mp-role-footer{position:sticky;bottom:12px}

@@ -1,5 +1,6 @@
 export const SYMBOL_KEYS = ["eye", "key", "power", "bio", "quantum"];
 export const ITEM_TOTALS = { eye: 6, key: 6, power: 6, bio: 6, quantum: 6 };
+export const SABOTAGE_TARGET = 7;
 
 const emptySymbols = () => Object.fromEntries(SYMBOL_KEYS.map((symbol) => [symbol, 0]));
 
@@ -97,7 +98,6 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   const succeeded = attacked && !blocked;
   const destroyed = Number(previousDestroyed) + (succeeded ? 1 : 0);
   const detected = attacked && inspection === targetLocationId;
-  const spyTotal = detected ? symbolTotal(spy.secret.totals) : null;
   const secretUpdates = [];
   let eliminatedUserId = null;
   let assassination = null;
@@ -140,7 +140,7 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   } else if (spyAction?.type === "attack") {
     spyLog = blocked
       ? `CYCLE ${String(room.current_round).padStart(2, "0")} · 락다운 감지, 파괴 공작 완전 차단`
-      : `CYCLE ${String(room.current_round).padStart(2, "0")} · 파괴 공작 성공, 현재 ${destroyed}/5 스택`;
+      : `CYCLE ${String(room.current_round).padStart(2, "0")} · 파괴 공작 성공, 현재 ${destroyed}/${SABOTAGE_TARGET} 스택`;
   } else {
     spyLog = `CYCLE ${String(room.current_round).padStart(2, "0")} · 조용히 있기, 공격하지 않음`;
   }
@@ -157,9 +157,9 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
   }).sort((a, b) => a.seat - b.seat);
   let status = "resolution";
   let result = null;
-  if (destroyed >= 5) {
+  if (destroyed >= SABOTAGE_TARGET) {
     status = "gameover";
-    result = { winner: "spy", reason: "중앙 타깃에 다섯 번째 파괴 공작이 성공했습니다.", spySeat: spy.member.seat, targetLocationId };
+    result = { winner: "spy", reason: "중앙 타깃에 일곱 번째 파괴 공작이 성공했습니다.", spySeat: spy.member.seat, targetLocationId };
   } else if (livingCrewMembers.length === 0) {
     status = "gameover";
     result = { winner: "spy", reason: "역추적으로 모든 승무원이 탈락했습니다.", spySeat: spy.member.seat, targetLocationId };
@@ -175,7 +175,7 @@ export function resolveRound({ room, members, secrets, actions, targetLocationId
       players,
       lastIsolation: isolation,
       spyExposed,
-      report: { isolation, inspection, detected, spyTotal, assassination },
+      report: { isolation, inspection, detected, assassination },
       question: null,
       broadcastAnswers: null,
       investigationQueue: [],
